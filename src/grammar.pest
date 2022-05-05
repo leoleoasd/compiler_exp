@@ -1,0 +1,11 @@
+
+
+integer10 = @{"0" | ('1'..'9' ~ '0'..'9'*)}
+integer8 = @{"0" ~ ('1'..'7' ~ '0'..'7'*)}
+integer16 = @{^"0x" ~ (!"0" ~ ASCII_HEX_DIGIT ) ~ ASCII_HEX_DIGIT *}
+integer = @{integer10 | integer8 | integer16}
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | ".")*}
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+// allow nested block comment
+block_comment  = _{ "/*" ~ (block_comment | !"*/" ~ ANY)* ~ "*/" }
+COMMENT = _{ block_comment | ("//" ~ (!NEWLINE ~ ANY)*) }
