@@ -1,5 +1,5 @@
+use clap::Parser;
 mod parser;
 
 fn main() {
-    println!("Hello, world!");
 }

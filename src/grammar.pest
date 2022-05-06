@@ -1,11 +1,18 @@
 
 
-integer10 = @{"0" | ('1'..'9' ~ '0'..'9'*)}
-integer8 = @{"0" ~ ('1'..'7' ~ '0'..'7'*)}
+integer10 = @{"0" | ((!"0" ~ ASCII_DIGIT) ~ ASCII_DIGIT*)}
+integer8 = @{"0" ~ ((!"0" ~ ASCII_OCT_DIGIT) ~ ASCII_OCT_DIGIT*)}
 integer16 = @{^"0x" ~ (!"0" ~ ASCII_HEX_DIGIT ) ~ ASCII_HEX_DIGIT *}
+real10 = @{integer10 ~ "." ~ ASCII_DIGIT*}
+real8 = @{integer8 ~ "." ~ ASCII_OCT_DIGIT*}
+real16 = @{integer16 ~ "." ~ ASCII_HEX_DIGIT*}
 integer = @{integer10 | integer8 | integer16}
+real = @{real10 | real8 | real16}
+// Yes, our grammar allow "." in identifier names.
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | ".")*}
 WHITESPACE = _{ " " | "\t" | NEWLINE }
+
+
 // allow nested block comment
 block_comment  = _{ "/*" ~ (block_comment | !"*/" ~ ANY)* ~ "*/" }
 COMMENT = _{ block_comment | ("//" ~ (!NEWLINE ~ ANY)*) }
