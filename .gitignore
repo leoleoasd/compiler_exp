@@ -1,1 +1,5 @@
 /target
+*.interp
+*.java
+*.tokens
+.antlr
