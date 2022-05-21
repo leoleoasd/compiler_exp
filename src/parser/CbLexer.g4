@@ -1,12 +1,15 @@
-lexer grammar lex;
+lexer grammar CbLexer;
 
 channels {
     COMMENTS
 }
 
 LINE_COMMENT: '//' .*? '\r'? '\n' -> channel(COMMENTS);
+
 // Allow recursive block comments
 BLOCK_COMMENT: '/*' (BLOCK_COMMENT | .)*? '*/' -> channel(COMMENTS);
+
+SPACES: ('\n' | '\r' | '\t' | ' ')+ -> skip;
 
 VOID: 'void';
 CHAR: 'char';
