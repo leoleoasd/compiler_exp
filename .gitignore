@@ -4,3 +4,6 @@
 *.tokens
 .antlr
 *.class
+src/parser/cblexer.rs
+src/parser/cbparser.rs
+src/parser/cblistener.rs

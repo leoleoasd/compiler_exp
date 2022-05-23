@@ -1,5 +1,23 @@
 grammar Cb;
 
+@parser::header {
+    use std::collections::HashSet;
+}
+@parser::fields {
+    types: HashSet<String>,
+}
+@parser::init {
+    types: HashSet::default(),
+}
+@parser::members {
+    fn isType(&self, name: &TokenType) -> bool {
+        let t = &name.text;
+        match t {
+            std::borrow::Cow::Owned(s) => self.types.contains(s),
+            std::borrow::Cow::Borrowed(s) => self.types.contains(*s),
+        }
+    }
+}
 
 LINE_COMMENT: '//' .*? '\r'? '\n' -> skip;
 
@@ -61,7 +79,7 @@ fragment CCHAR: ~["\\\r\n] | ESCAPE;
 fragment SCHAR: ~["\\\r\n] | ESCAPE | '\\\n' | '\\\r\n';
 fragment ESCAPE: '\\' ['"?abfnrtv\\];
 
-
+// Parser
 // compile unit
 compUnit: top_def+ EOF;
 name: IDENTIFIER;
@@ -73,33 +91,41 @@ top_def:
 	| union_def
 	| type_def;
 var_def:
-	s = storage t = type n = name ('=' init = expr)? (
-		',' n = name ('=' init = expr)?
+	s = storage t = typeName name ('=' init = expr)? (
+		',' name ('=' init = expr)?
 	)* ';';
-const_def: CONST t = type n = name '=' value = expr ';';
+const_def: CONST t = typeName name '=' value = expr ';';
 func_def:
-	s = storage ret = typeRef n = name '(' p = params ')' body = block;
+	s = storage ret = typeName name '(' p = params ')' body = block;
 storage: STATIC?;
 params: VOID | param (',' param)* (',' '...')?;
-param: t = type n = name;
+param: t = typeName name;
 block: '{' defvar_list stmts '}';
 defvar_list: vars = var_def*;
-struct_def: STRUCT n = name members = member_list ';';
-union_def: UNION n = name members = member_list ';';
+struct_def: STRUCT name member_list ';' {
+    let name = ($name.text.to_owned());
+    recog.types.insert(name);
+};
+union_def: UNION name member_list ';' {
+    let name = ($name.text.to_owned());
+    recog.types.insert(name);
+};
 member_list: '{' (member ';')* '}';
-member: t = type n = name;
-type_def: TYPEDEF typeRef IDENTIFIER ';';
-type: typeRef;
-typeRef:
-	typeRefBase (
+member: t = typeName name;
+type_def: TYPEDEF typeName name ';'{
+    let name = ($name.text.to_owned());
+    recog.types.insert(name);
+};
+typeName:
+	typeBase (
 		'[' ']'
 		| '[' INTEGER ']'
 		| '*'
-		| '(' paramTypeRefs ')'
+		| '(' paramtypes ')'
 	)*;
-paramTypeRefs: VOID | paramTypeRef+ (',' '...')?;
-paramTypeRef: n = name;
-typeRefBase:
+paramtypes: VOID | paramtype+ (',' '...')?;
+paramtype: name;
+typeBase:
 	VOID
 	| CHAR
 	| SHORT
@@ -109,9 +135,9 @@ typeRefBase:
 	| UNSIGNED SHORT
 	| UNSIGNED INT
 	| UNSIGNED LONG
-	| STRUCT n = IDENTIFIER
-	| UNION n = IDENTIFIER
-	| {isType()}? IDENTIFIER;
+	| STRUCT IDENTIFIER
+	| UNION IDENTIFIER
+	| {recog.isType(recog.get_current_token())}?  IDENTIFIER;
 stmts: stmt*;
 stmt:
 	';'
@@ -127,7 +153,7 @@ stmt:
 	| continue_stmt
 	| goto_stmt
 	| return_stmt;
-labeled_stmt: n = IDENTIFIER ':' stmt;
+labeled_stmt: IDENTIFIER ':' stmt;
 if_stmt:
 	IF '(' cond = expr ')' thenStmt = stmt (ELSE elseStmt = stmt)?;
 while_stmt: WHILE '(' cond = expr ')' body = stmt;
@@ -140,7 +166,7 @@ case_clause: values = cases () body = case_body;
 cases: (CASE primary ':')+;
 default_clause: DEFAULT ':' body = case_body;
 case_body: (stmt)+;
-goto_stmt: GOTO n = IDENTIFIER ';';
+goto_stmt: GOTO IDENTIFIER ';';
 break_stmt: BREAK ';';
 continue_stmt: CONTINUE ';';
 return_stmt: RETURN expr? ';';
@@ -157,10 +183,10 @@ expr:
 	| 
     // unary
     <assoc=right> ('++' | '--' | '+' | '-' | '!' | '~' | '*' | '&') expr # unaryOp
-    | (SIZEOF '(' type ')') # sizeofType
+    | (SIZEOF '(' typeName ')') # sizeofType
     | (SIZEOF expr) # sizeofExpr
     // cast
-	| '(' type ')' expr	# castOp
+	| '(' typeName ')' expr	# castOp
     // binary
     | expr ('*' | '/' | '%') expr # mulDiv
     | expr ('+' | '-') expr # addSub
