@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = "3.1.15"
+clap = { version = "3.1.15", features = ["derive"] }
 antlr-rust = "0.2"
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm13-0"] }
+inkwell = { git = "https://github.com/TheDan64/inkwell", commit = "02fb7045f7a952c80bc983e19093c62c6ccffe3d", features = ["llvm13-0"] }
 codespan-reporting = "0.11.1"

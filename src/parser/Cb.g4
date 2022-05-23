@@ -1,6 +1,15 @@
 grammar Cb;
-
+@lexer::header {
+#![allow(unused_braces)]
+#![allow(unused_parens)]
+}
+@listener::header {
+#![allow(unused_braces)]
+#![allow(unused_parens)]
+}
 @parser::header {
+#![allow(unused_braces)]
+#![allow(unused_parens)]
     use std::collections::HashSet;
 }
 @parser::fields {
