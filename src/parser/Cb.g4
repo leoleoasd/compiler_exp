@@ -13,6 +13,22 @@ grammar Cb;
 use std::collections::HashMap;
 use crate::ast::types::Type;
 use crate::ast::types;
+use std::error::Error;
+use std::fmt::{Formatter, Debug, Display, self};
+struct TypeNotFoundError {
+	name: String,
+}	
+impl Debug for TypeNotFoundError {
+	fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+		write!(f, "Type {} not found", self.name)
+	}
+}
+impl Display for TypeNotFoundError {
+	fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+		write!(f, "Type {} not found", self.name)
+	}
+}
+impl Error for TypeNotFoundError {}
 }
 @parser::fields {
     pub types: HashMap<String, types::Type>,
@@ -22,7 +38,13 @@ use crate::ast::types;
 }
 @parser::members {
 	fn registerType(&mut self, name: String, t: types::Type) {
+		println!("Registering type {}", name);
+		println!("{:?}", t);
 		self.types.insert(name, t);
+	}
+	fn getType(&self, name: &str) -> Option<&types::Type> {
+		println!("Getting type {}: {:?}", name, self.types.get(name));
+		self.types.get(name)
 	}
     fn isType(&self, name: &TokenType) -> bool {
         let t = &name.text;
@@ -128,7 +150,11 @@ structDef:
 // types::UnionType{name, fields: $memberList.v}; recog.registerType(name, selfType.into()); };
 memberList
 	returns[Vec<(String, types::Type)> v]:
-	'{' (m = member ';')* '}' {
+	'{' (m = member {
+		let mut vclone = (&$v).clone();
+		vclone.push($m.v.clone());
+		$v = vclone;
+	} ';')* '}' {
 	
 };
 member
@@ -141,19 +167,19 @@ member
 // recog.registerType(name); };
 typeName
 	returns[types::Type v]:
-	typeBase (
+	typeBase {$v = $typeBase.v;} (
 		'[' ']' {
-			$v = Type::from(types::PointerType{element_type: Box::new($typeBase.v.to_owned())});
+			$v = Type::from(types::PointerType{element_type: Box::new((&$v).to_owned())});
 		}
 		| '[' INTEGER ']' {
-			$v = Type::from(types::ArrayType{element_type: Box::new($typeBase.v.to_owned()), size: str::parse::<usize>($INTEGER.text).unwrap()});
+			$v = Type::from(types::ArrayType{element_type: Box::new((&$v).to_owned()), size: str::parse::<usize>($INTEGER.text).unwrap()});
 		}
 		| '*' {
-			$v = Type::from(types::PointerType{element_type: Box::new($typeBase.v.to_owned())});
+			$v = Type::from(types::PointerType{element_type: Box::new((&$v).to_owned())});
 		}
 		| '(' paramtypes ')' {
 			$v = Type::from(types::FunctionType{
-				return_type: Box::new($typeBase.v.to_owned()),
+				return_type: Box::new((&$v).to_owned()),
 				parameters: $paramtypes.v.0.clone(),
 				variadic: $paramtypes.v.1,
 			});
@@ -206,10 +232,18 @@ paramtype
 		$v = types::Type::Integer(types::IntegerType{size: 64, signed: false});
 	}
 	| STRUCT n = IDENTIFIER {
-		todo!();
-	}
-	| UNION n = IDENTIFIER {
-		todo!();
+		let t = match recog.getType(&$n.text) {
+			Some(t) => t.clone(),
+			None => {
+				let name = (&$n.text);
+				return Err(
+					ANTLRError::FallThrough(Rc::new(
+						TypeNotFoundError{name: name.to_string()}
+					))
+				);
+			},
+		};
+		$v = t;
 	};
 typeBase
 	returns[types::Type v]:
@@ -241,10 +275,18 @@ typeBase
 		$v = types::Type::Integer(types::IntegerType{size: 64, signed: false});
 	}
 	| STRUCT n = IDENTIFIER {
-		todo!();
-	}
-	| UNION n = IDENTIFIER {
-		todo!();
+		let t = match recog.getType(&$n.text) {
+			Some(t) => t.clone(),
+			None => {
+				let name = (&$n.text);
+				return Err(
+					ANTLRError::FallThrough(Rc::new(
+						TypeNotFoundError{name: name.to_string()}
+					))
+				);
+			},
+		};
+		$v = t;
 	};
 // | {recog.isType(recog.get_current_token())}? IDENTIFIER;
 stmts: stmt*;

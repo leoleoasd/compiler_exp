@@ -7,3 +7,7 @@ char a = '2';
 struct test {
     int a;
 };
+struct test_again{
+    struct test pointer;
+    char***** b;
+};
