@@ -14,8 +14,7 @@ dependencies = [
 [[package]]
 name = "antlr-rust"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94946f8fdc01e6422a2da2783747c651a851b7a5e25f6871d6e2cebdc64a38de"
+source = "git+https://github.com/rrevenantt/antlr4rust.git?rev=4eecc87e942531fec2d5901af0d138d9339c8e80#4eecc87e942531fec2d5901af0d138d9339c8e80"
 dependencies = [
  "better_any",
  "bit-set",
@@ -158,6 +157,7 @@ name = "compiler-exp"
 version = "0.1.0"
 dependencies = [
  "antlr-rust",
+ "bit-set",
  "clap",
  "codespan-reporting",
  "inkwell",
@@ -203,7 +203,7 @@ dependencies = [
 [[package]]
 name = "inkwell"
 version = "0.1.0"
-source = "git+https://github.com/TheDan64/inkwell#02fb7045f7a952c80bc983e19093c62c6ccffe3d"
+source = "git+https://github.com/TheDan64/inkwell?rev=02fb7045f7a952c80bc983e19093c62c6ccffe3d#02fb7045f7a952c80bc983e19093c62c6ccffe3d"
 dependencies = [
  "either",
  "inkwell_internals",
@@ -216,7 +216,7 @@ dependencies = [
 [[package]]
 name = "inkwell_internals"
 version = "0.5.0"
-source = "git+https://github.com/TheDan64/inkwell#02fb7045f7a952c80bc983e19093c62c6ccffe3d"
+source = "git+https://github.com/TheDan64/inkwell?rev=02fb7045f7a952c80bc983e19093c62c6ccffe3d#02fb7045f7a952c80bc983e19093c62c6ccffe3d"
 dependencies = [
  "proc-macro2",
  "quote",

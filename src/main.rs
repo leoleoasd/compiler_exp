@@ -1,10 +1,26 @@
 #![feature(try_blocks)]
 
-use clap::Parser;
-use std::{process::{Command, Stdio}, io, path::Path};
+use antlr_rust::common_token_stream::CommonTokenStream;
+use antlr_rust::token_stream::TokenStream;
+use antlr_rust::Parser;
+use antlr_rust::{
+    int_stream::IntStream, token::Token, token_stream::UnbufferedTokenStream, InputStream,
+};
+use clap::Parser as ClapParser;
+use parser::cbparser::CbParser;
+use std::{
+    io,
+    ops::Deref,
+    path::Path,
+    process::{Command, Stdio},
+    rc::Rc,
+};
+
+use crate::parser::{cblexer, errors};
+mod ast;
 mod parser;
 
-#[derive(Parser, Debug)]
+#[derive(ClapParser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
     /// File name to compile
@@ -21,11 +37,47 @@ struct Cli {
 
 fn main() {
     let cli = Cli::parse();
-    let code = preprocess(&cli.name).unwrap();
+    let code = Box::leak(Box::new(preprocess(&cli.name).unwrap()));
     if cli.preprocess {
         println!("Preprocessed Code:");
         println!("{}", code);
     }
+    let mut tokens = lex(code).unwrap();
+    let mut token_vec = Vec::new();
+    if cli.lex {
+        println!("Lexer Result:");
+        for i in 1.. {
+            let token = match tokens.lt(i) {
+                Some(token) => token,
+                None => break,
+            };
+            if token.get_token_type() == antlr_rust::token::TOKEN_EOF {
+                break;
+            }
+            token_vec.push(*token.clone());
+            let rule_name = if (token.get_token_type() as usize) < cblexer::_LITERAL_NAMES.len() {
+                cblexer::_LITERAL_NAMES[token.get_token_type() as usize].unwrap()
+            } else {
+                cblexer::_SYMBOLIC_NAMES[token.get_token_type() as usize].unwrap()
+            };
+            println!(
+                "{: <3} {: <20} at {}:{}",
+                token.get_token_type(),
+                rule_name,
+                token.line,
+                token.column
+            );
+        }
+        tokens.seek(0);
+    }
+    let token_vec = Rc::new(token_vec);
+    let mut parser = CbParser::new(tokens);
+    let listener = errors::CodeSpanListener::new(&cli.name, &code, token_vec.clone());
+    parser.remove_error_listeners();
+    parser.add_error_listener(Box::new(listener));
+    let result = parser.compUnit().unwrap();
+    println!("{:?}", result);
+    println!("{:?}", parser.types);
 }
 
 fn preprocess(file: &str) -> Result<String, io::Error> {
@@ -43,4 +95,16 @@ fn preprocess(file: &str) -> Result<String, io::Error> {
         .wait_with_output()?;
     let code = String::from_utf8(output.stdout).unwrap();
     Ok(code)
+}
+
+fn lex(
+    code: &String,
+) -> std::result::Result<
+    CommonTokenStream<parser::cblexer::CbLexer<antlr_rust::InputStream<&str>>>,
+    (),
+> {
+    let stream = InputStream::new(code.deref());
+    let lexer = cblexer::CbLexer::new(stream);
+    let token_source = CommonTokenStream::new(lexer);
+    Ok(token_source)
 }

@@ -1,1 +1,1 @@
-extern printf(char *, ...);
+extern int printf(char *, ...);

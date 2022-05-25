@@ -7,3 +7,4 @@
 src/parser/cblexer.rs
 src/parser/cbparser.rs
 src/parser/cblistener.rs
+src/parser/cbvisitor.rs
