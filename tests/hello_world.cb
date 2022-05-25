@@ -8,6 +8,6 @@ struct test {
     int a;
 };
 struct test_again{
-    struct test fucj;
+    struct not_found_type* pointer;
     char***** b;
 };

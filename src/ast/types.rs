@@ -1,6 +1,6 @@
 use std::{boxed::Box, collections::HashMap};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
     Void,
     Integer(IntegerType),
@@ -10,36 +10,36 @@ pub enum Type {
     Struct(StructType),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IntegerType {
     pub signed: bool,
     pub size: usize,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 
 pub struct ArrayType {
     pub size: usize,
     pub element_type: Box<Type>,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 
 pub struct FunctionType {
     pub return_type: Box<Type>,
     pub parameters: Vec<Type>,
     pub variadic: bool,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 
 pub struct PointerType {
     pub element_type: Box<Type>,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 
 pub struct StructType {
     pub name: String,
     pub fields: Vec<(String, Type)>,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 
 pub struct TypeDefType {
     pub name: String,

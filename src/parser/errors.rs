@@ -79,17 +79,18 @@ where
         _msg: &str,
         _error: Option<&antlr_rust::errors::ANTLRError>,
     ) {
-        let diagnostic = Diagnostic::error()
-            .with_message(_msg)
-            .with_labels(vec![Label::primary(
-                (),
-                _offending_symbol
-                    .map_or(0..0, |s| s.get_start() as usize..s.get_stop() as usize + 1),
-            )
-            .with_message(_msg)])
-            .with_notes(vec![_error
-                .map(|e| e.to_string())
-                .unwrap_or_else(|| "".to_string())]);
+        let mut diagnostic =
+            Diagnostic::error()
+                .with_message(_msg)
+                .with_labels(vec![Label::primary(
+                    (),
+                    _offending_symbol
+                        .map_or(0..0, |s| s.get_start() as usize..s.get_stop() as usize + 1),
+                )
+                .with_message(_msg)]);
+        if let Some(err) = _error {
+            diagnostic = diagnostic.with_notes(vec![_error.map(|e| e.to_string()).unwrap()]);
+        }
         let writer = StandardStream::stderr(ColorChoice::Always);
         let config = codespan_reporting::term::Config::default();
         term::emit(&mut writer.lock(), &config, &self.file, &diagnostic).unwrap();

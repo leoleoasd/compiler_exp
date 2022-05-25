@@ -279,6 +279,12 @@ typeBase
 			Some(t) => t.clone(),
 			None => {
 				let name = (&$n.text);
+				recog.notify_error_listeners(
+					format!("Type struct {} not found", name),
+					// last token
+					Some(recog.base.input.index() - 1),
+					None
+				);
 				return Err(
 					ANTLRError::FallThrough(Rc::new(
 						TypeNotFoundError{name: name.to_string()}
