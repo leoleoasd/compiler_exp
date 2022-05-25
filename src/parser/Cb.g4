@@ -100,7 +100,7 @@ topDef:
 	| funcDecl
 	| varDef
 	| constDef
-	| structDef
+	| structDef ;
 	// TODO: support unionDef TODO: support typeDef;
 varDef:
 	s = storage t = typeName name ('=' init = expr)? (
