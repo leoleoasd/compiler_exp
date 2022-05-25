@@ -8,6 +8,7 @@ use antlr_rust::{
 };
 use clap::Parser as ClapParser;
 use parser::cbparser::CbParser;
+use parser::errors::CodeSpanListener;
 use std::{
     io,
     ops::Deref,
@@ -42,10 +43,8 @@ fn main() {
         println!("Preprocessed Code:");
         println!("{}", code);
     }
-    let mut tokens = lex(code).unwrap();
+    let mut tokens = lex(code, cli.name.clone()).unwrap();
     let mut token_vec = Vec::new();
-    if cli.lex {
-        println!("Lexer Result:");
         for i in 1.. {
             let token = match tokens.lt(i) {
                 Some(token) => token,
@@ -54,6 +53,8 @@ fn main() {
             if token.get_token_type() == antlr_rust::token::TOKEN_EOF {
                 break;
             }
+
+    if cli.lex {
             token_vec.push(*token.clone());
             let rule_name = if (token.get_token_type() as usize) < cblexer::_LITERAL_NAMES.len() {
                 cblexer::_LITERAL_NAMES[token.get_token_type() as usize].unwrap()
@@ -68,8 +69,8 @@ fn main() {
                 token.column
             );
         }
+        }
         tokens.seek(0);
-    }
     let token_vec = Rc::new(token_vec);
     let mut parser = CbParser::new(tokens);
     let listener = errors::CodeSpanListener::new(&cli.name, &code, token_vec.clone());
@@ -77,7 +78,8 @@ fn main() {
     parser.add_error_listener(Box::new(listener));
     let result = parser.compUnit().unwrap();
     println!("{:?}", result);
-    println!("{:?}", parser.types);
+    println!("{:#?}", parser.types);
+    println!("{:#?}", parser.scope);
 }
 
 fn preprocess(file: &str) -> Result<String, io::Error> {
@@ -87,6 +89,7 @@ fn preprocess(file: &str) -> Result<String, io::Error> {
     let output = Command::new("cpp")
         .arg(file)
         .arg("-P")
+        .arg("-w")
         .arg("-I")
         .arg(file_path.parent().unwrap())
         .stdout(Stdio::piped())
@@ -99,12 +102,16 @@ fn preprocess(file: &str) -> Result<String, io::Error> {
 
 fn lex(
     code: &String,
+    name: String,
 ) -> std::result::Result<
     CommonTokenStream<parser::cblexer::CbLexer<antlr_rust::InputStream<&str>>>,
     (),
 > {
     let stream = InputStream::new(code.deref());
-    let lexer = cblexer::CbLexer::new(stream);
+    let mut lexer = cblexer::CbLexer::new(stream);
+    let listener: CodeSpanListener<&str> = errors::CodeSpanListener::new(&name, &code, Rc::new(vec![]));
+    lexer.remove_error_listeners();
+    lexer.add_error_listener(Box::new(listener));
     let token_source = CommonTokenStream::new(lexer);
     Ok(token_source)
 }

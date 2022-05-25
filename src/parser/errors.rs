@@ -9,9 +9,11 @@ use codespan_reporting::diagnostic::{self, Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
-
+use antlr_rust::errors::ANTLRError;
+use antlr_rust::errors::ANTLRError::LexerNoAltError;
 pub struct CodeSpanListener<T> {
     file: SimpleFile<String, String>,
+    code: String,
     tokens: Rc<Vec<GenericToken<T>>>,
 }
 
@@ -20,6 +22,7 @@ impl<T> CodeSpanListener<T> {
         Self {
             file: SimpleFile::new(name.to_string(), code.to_string()),
             tokens,
+            code: code.to_string()
         }
     }
 }
@@ -85,7 +88,24 @@ where
                 .with_labels(vec![Label::primary(
                     (),
                     _offending_symbol
-                        .map_or(0..0, |s| s.get_start() as usize..s.get_stop() as usize + 1),
+                        .map_or_else(|| {
+                            if let Some(LexerNoAltError{start_index}) = _error {
+                                return *start_index as usize..*start_index as usize+1;
+                            }
+                            let mut line = 1;
+                            let mut col = 1;
+                            for (i, char) in self.code.chars().enumerate() {
+                                if char == '\n' {
+                                    line += 1;
+                                    col = 1;
+                                    break;
+                                }
+                                if line == _line && col == _column {
+                                    return i..i+1;
+                                }
+                            }
+                            0..0
+                        }, |s| s.get_start() as usize..s.get_stop() as usize + 1),
                 )
                 .with_message(_msg)]);
         if let Some(err) = _error {

@@ -1,5 +1,9 @@
 #include <stdio.ch>
 int main(int argc, char []* argv) {
+    int b = 2;
+    char b = 2;
+    char* c = "123 \
+123";
     printf("hello %s\n", "world!");
     return 0;
 }
@@ -8,6 +12,10 @@ struct test {
     int a;
 };
 struct test_again{
-    struct not_found_type* pointer;
+    struct test* pointer;
     char***** b;
 };
+int c = d;
+int foo() {
+    struct test ss;
+}

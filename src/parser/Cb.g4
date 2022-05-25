@@ -12,6 +12,9 @@ grammar Cb;
 #![allow(unused_parens)]
 use std::collections::HashMap;
 use crate::ast::types::Type;
+use crate::ast::scope::Scope;
+use crate::ast::scope::SubScope;
+use crate::ast::scope::VariableRedifinationError;
 use crate::ast::types;
 use std::error::Error;
 use std::fmt::{Formatter, Debug, Display, self};
@@ -32,9 +35,11 @@ impl Error for TypeNotFoundError {}
 }
 @parser::fields {
     pub types: HashMap<String, types::Type>,
+	pub scope: Scope,
 }
 @parser::init {
     types: HashMap::default(),
+	scope: Scope::new(),
 }
 @parser::members {
 	fn registerType(&mut self, name: String, t: types::Type) {
@@ -125,7 +130,36 @@ topDef:
 	| structDef ;
 	// TODO: support unionDef TODO: support typeDef;
 varDef:
-	s = storage t = typeName name ('=' init = expr)? (
+	s = storage t = typeName name {
+		let text = &$name.text;
+		let start = $name.start.unwrap().deref().start;
+		let stop = $name.stop.unwrap().deref().stop;
+		let t = $t.v.clone();
+		let index = recog.base.input.index() - 1;
+		let result = recog.scope.defineVariable(
+			text, 
+			start..stop + 1, 
+			index,
+			t
+		);
+		if result.is_err() {
+			let name = $name.text.to_string();
+			let err = result.unwrap_err();
+			recog.notify_error_listeners(
+				format!("Variable {} is defined twice", name),
+				// last token
+				Some(recog.base.input.index() - 1),
+				None
+			);
+			recog.notify_error_listeners(
+				format!("Previously defined here"),
+				// last token
+				Some(err.previous_index),
+				None
+			);
+			return Err(ANTLRError::FallThrough(Rc::new(err)));
+		}
+	} ('=' init = expr)? (
 		',' name ('=' init = expr)?
 	)* ';';
 constDef: CONST t = typeName name '=' value = expr ';';
@@ -137,7 +171,7 @@ params: VOID | param (',' param)* (',' '...')?;
 param: t = typeName name;
 paramsDecl: VOID | paramDecl (',' paramDecl)* (',' '...')?;
 paramDecl: t = typeName;
-block: '{' defvarList stmts '}';
+block returns [Option<Rc<RefCell<SubScope>>> scope]: '{' {$scope = Some(recog.scope.push());} defvarList stmts '}' {recog.scope.pop();};
 defvarList: vars = varDef*;
 structDef:
 	STRUCT name memberList ';' {
@@ -236,6 +270,12 @@ paramtype
 			Some(t) => t.clone(),
 			None => {
 				let name = (&$n.text);
+				recog.notify_error_listeners(
+					format!("Type struct {} not found", name),
+					// last token
+					Some(recog.base.input.index() - 1),
+					None
+				);
 				return Err(
 					ANTLRError::FallThrough(Rc::new(
 						TypeNotFoundError{name: name.to_string()}
