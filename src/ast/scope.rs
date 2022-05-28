@@ -1,4 +1,5 @@
 use crate::ast::types::Type;
+use crate::parser::errors::ParserError;
 use std::cell::{Ref, RefCell};
 use std::error::Error;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -9,32 +10,10 @@ use std::{
     rc::Rc,
 };
 
-pub struct VariableRedifinationError {
-    pub name: String,
-    pub previous_index: isize,
-}
-// TODO: implement error diagnostics about previously defined
-impl Error for VariableRedifinationError {}
-impl Debug for VariableRedifinationError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "VariableRedifinationError: Variable {} is defined twice",
-            self.name
-        )
-    }
-}
-impl Display for VariableRedifinationError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        <Self as Debug>::fmt(self, f)
-    }
-}
-
 #[derive(Debug)]
 pub struct Entity {
     pub name: String,
-    pub location: Range<isize>,
-    pub index: isize,
+    pub location: Range<usize>,
     pub _type: Type,
 }
 
@@ -78,15 +57,14 @@ impl Scope {
     pub fn defineVariable(
         &mut self,
         name: &str,
-        location: Range<isize>,
-        index: isize,
+        location: Range<usize>,
         _type: Type,
-    ) -> Result<Rc<Entity>, VariableRedifinationError> {
+    ) -> Result<Rc<Entity>, ParserError> {
         self.stack
             .last()
             .unwrap()
             .borrow_mut()
-            .defineVariable(name, location, index, _type)
+            .defineVariable(name, location, _type)
     }
 }
 #[derive(Debug)]
@@ -108,22 +86,20 @@ impl SubScope {
     fn defineVariable(
         &mut self,
         name: &str,
-        location: Range<isize>,
-        index: isize,
+        location: Range<usize>,
         _type: Type,
-    ) -> Result<Rc<Entity>, VariableRedifinationError> {
+    ) -> Result<Rc<Entity>, ParserError> {
         if let Some(v) = self.entities.get(name) {
-            return Err(VariableRedifinationError {
-                name: name.to_string(),
-                previous_index: v.index,
-            });
+            return Err(ParserError::VariableRedefination(
+                name.to_string(),
+                v.location.clone(),
+            ));
         }
         self.entities.insert(
             name.to_string(),
             Rc::new(Entity {
                 name: name.to_string(),
                 location,
-                index,
                 _type,
             }),
         );

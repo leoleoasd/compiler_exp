@@ -9,6 +9,8 @@ use antlr_rust::{
 use clap::Parser as ClapParser;
 use parser::cbparser::CbParser;
 use parser::errors::CodeSpanListener;
+use std::error::Error;
+use std::fmt::Display;
 use std::{
     io,
     ops::Deref,
@@ -45,16 +47,16 @@ fn main() {
     }
     let mut tokens = lex(code, cli.name.clone()).unwrap();
     let mut token_vec = Vec::new();
-        for i in 1.. {
-            let token = match tokens.lt(i) {
-                Some(token) => token,
-                None => break,
-            };
-            if token.get_token_type() == antlr_rust::token::TOKEN_EOF {
-                break;
-            }
+    for i in 1.. {
+        let token = match tokens.lt(i) {
+            Some(token) => token,
+            None => break,
+        };
+        if token.get_token_type() == antlr_rust::token::TOKEN_EOF {
+            break;
+        }
 
-    if cli.lex {
+        if cli.lex {
             token_vec.push(*token.clone());
             let rule_name = if (token.get_token_type() as usize) < cblexer::_LITERAL_NAMES.len() {
                 cblexer::_LITERAL_NAMES[token.get_token_type() as usize].unwrap()
@@ -69,8 +71,8 @@ fn main() {
                 token.column
             );
         }
-        }
-        tokens.seek(0);
+    }
+    tokens.seek(0);
     let token_vec = Rc::new(token_vec);
     let mut parser = CbParser::new(tokens);
     let listener = errors::CodeSpanListener::new(&cli.name, &code, token_vec.clone());
@@ -109,7 +111,8 @@ fn lex(
 > {
     let stream = InputStream::new(code.deref());
     let mut lexer = cblexer::CbLexer::new(stream);
-    let listener: CodeSpanListener<&str> = errors::CodeSpanListener::new(&name, &code, Rc::new(vec![]));
+    let listener: CodeSpanListener<&str> =
+        errors::CodeSpanListener::new(&name, &code, Rc::new(vec![]));
     lexer.remove_error_listeners();
     lexer.add_error_listener(Box::new(listener));
     let token_source = CommonTokenStream::new(lexer);

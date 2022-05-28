@@ -9,3 +9,4 @@ antlr-rust = { git = "https://github.com/rrevenantt/antlr4rust.git", rev = "4eec
 inkwell = { git = "https://github.com/TheDan64/inkwell", rev = "02fb7045f7a952c80bc983e19093c62c6ccffe3d", features = ["llvm13-0"] }
 codespan-reporting = "0.11.1"
 bit-set = "0.5.2"
+quick-error = "2.0.1"

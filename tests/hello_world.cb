@@ -1,9 +1,9 @@
 #include <stdio.ch>
+int b = 2;
 int main(int argc, char []* argv) {
     int b = 2;
     char b = 2;
-    char* c = "123 \
-123";
+    char* c = "123 123";
     printf("hello %s\n", "world!");
     return 0;
 }
@@ -16,6 +16,6 @@ struct test_again{
     char***** b;
 };
 int c = d;
-int foo() {
+int foo(void) {
     struct test ss;
 }

@@ -14,24 +14,9 @@ use std::collections::HashMap;
 use crate::ast::types::Type;
 use crate::ast::scope::Scope;
 use crate::ast::scope::SubScope;
-use crate::ast::scope::VariableRedifinationError;
 use crate::ast::types;
-use std::error::Error;
 use std::fmt::{Formatter, Debug, Display, self};
-struct TypeNotFoundError {
-	name: String,
-}	
-impl Debug for TypeNotFoundError {
-	fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-		write!(f, "Type {} not found", self.name)
-	}
-}
-impl Display for TypeNotFoundError {
-	fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-		write!(f, "Type {} not found", self.name)
-	}
-}
-impl Error for TypeNotFoundError {}
+use crate::parser::errors::ParserError;
 }
 @parser::fields {
     pub types: HashMap<String, types::Type>,
@@ -132,32 +117,25 @@ topDef:
 varDef:
 	s = storage t = typeName name {
 		let text = &$name.text;
-		let start = $name.start.unwrap().deref().start;
-		let stop = $name.stop.unwrap().deref().stop;
+		let start = $name.start.unwrap().deref().start as usize;
+		let stop = $name.stop.unwrap().deref().stop as usize;
 		let t = $t.v.clone();
-		let index = recog.base.input.index() - 1;
 		let result = recog.scope.defineVariable(
 			text, 
 			start..stop + 1, 
-			index,
 			t
 		);
 		if result.is_err() {
 			let name = $name.text.to_string();
 			let err = result.unwrap_err();
+			let err = ANTLRError::FallThrough(Rc::new(err));
 			recog.notify_error_listeners(
 				format!("Variable {} is defined twice", name),
 				// last token
 				Some(recog.base.input.index() - 1),
-				None
+				Some(&err)
 			);
-			recog.notify_error_listeners(
-				format!("Previously defined here"),
-				// last token
-				Some(err.previous_index),
-				None
-			);
-			return Err(ANTLRError::FallThrough(Rc::new(err)));
+			return Err(err);
 		}
 	} ('=' init = expr)? (
 		',' name ('=' init = expr)?
@@ -278,7 +256,7 @@ paramtype
 				);
 				return Err(
 					ANTLRError::FallThrough(Rc::new(
-						TypeNotFoundError{name: name.to_string()}
+						ParserError::TypeNotFound(name.to_string())
 					))
 				);
 			},
@@ -327,7 +305,7 @@ typeBase
 				);
 				return Err(
 					ANTLRError::FallThrough(Rc::new(
-						TypeNotFoundError{name: name.to_string()}
+						ParserError::TypeNotFound(name.to_string())
 					))
 				);
 			},
