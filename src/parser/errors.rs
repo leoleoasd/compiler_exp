@@ -50,9 +50,8 @@ impl ParserError {
         match self {
             ParserError::TypeNotFound(name) => Diagnostic::error()
                 .with_message(format!("Type {name} not found"))
-                .with_labels(vec![
-                    Label::primary(file_id.clone(), range).with_message(format!("Type {name} not found"))
-                ]),
+                .with_labels(vec![Label::primary(file_id.clone(), range)
+                    .with_message(format!("Type {name} not found"))]),
             ParserError::VariableRedefination(name, previously_occur) => Diagnostic::error()
                 .with_message(format!("Variable {name} is already defined!"))
                 .with_labels(vec![
@@ -147,7 +146,7 @@ where
             },
             |s| s.get_start() as usize..s.get_stop() as usize + 1,
         );
-        
+
         let diagnostic = if let Some(ANTLRError::FallThrough(err)) = _error {
             if err.is::<ParserError>() {
                 let err = err.downcast_ref::<ParserError>().unwrap();
@@ -155,20 +154,12 @@ where
             } else {
                 Diagnostic::error()
                     .with_message(_msg)
-                    .with_labels(vec![Label::primary(
-                        (),
-                        range,
-                    )
-                    .with_message(_msg)])
+                    .with_labels(vec![Label::primary((), range).with_message(_msg)])
             }
         } else {
             Diagnostic::error()
                 .with_message(_msg)
-                .with_labels(vec![Label::primary(
-                    (),
-                    range,
-                )
-                .with_message(_msg)])
+                .with_labels(vec![Label::primary((), range).with_message(_msg)])
         };
         let writer = StandardStream::stderr(ColorChoice::Always);
         let config = codespan_reporting::term::Config::default();

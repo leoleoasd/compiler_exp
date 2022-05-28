@@ -107,13 +107,8 @@ fragment ESCAPE: '\\' ['"?abfnrtv\\];
 // Parser compile unit
 compUnit: topDef+ EOF;
 name: IDENTIFIER;
-topDef:
-	funcDef
-	| funcDecl
-	| varDef
-	| constDef
-	| structDef ;
-	// TODO: support unionDef TODO: support typeDef;
+topDef: funcDef | funcDecl | varDef | constDef | structDef;
+// TODO: support unionDef TODO: support typeDef;
 varDef:
 	s = storage t = typeName name {
 		let text = &$name.text;
@@ -137,9 +132,7 @@ varDef:
 			);
 			return Err(err);
 		}
-	} ('=' init = expr)? (
-		',' name ('=' init = expr)?
-	)* ';';
+	} ('=' init = expr)? (',' name ('=' init = expr)?)* ';';
 constDef: CONST t = typeName name '=' value = expr ';';
 funcDef:
 	s = storage ret = typeName name '(' p = params ')' body = block;
@@ -149,12 +142,14 @@ params: VOID | param (',' param)* (',' '...')?;
 param: t = typeName name;
 paramsDecl: VOID | paramDecl (',' paramDecl)* (',' '...')?;
 paramDecl: t = typeName;
-block returns [Option<Rc<RefCell<SubScope>>> scope]: '{' {$scope = Some(recog.scope.push());} defvarList stmts '}' {recog.scope.pop();};
+block
+	returns[Option<Rc<RefCell<SubScope>>> scope]:
+	'{' {$scope = Some(recog.scope.push());} defvarList stmts '}' {recog.scope.pop();};
 defvarList: vars = varDef*;
 structDef:
 	STRUCT name memberList ';' {
 	let name = $name.text.to_owned();
-	let selfType = types::StructType{name, fields: $memberList.v.clone()};
+	let selfType = Type::Struct{name, fields: $memberList.v.clone()};
 	let name = $name.text.to_owned();
     recog.registerType(name, selfType.into());
 };
@@ -162,11 +157,13 @@ structDef:
 // types::UnionType{name, fields: $memberList.v}; recog.registerType(name, selfType.into()); };
 memberList
 	returns[Vec<(String, types::Type)> v]:
-	'{' (m = member {
+	'{' (
+		m = member {
 		let mut vclone = (&$v).clone();
 		vclone.push($m.v.clone());
 		$v = vclone;
-	} ';')* '}' {
+	} ';'
+	)* '}' {
 	
 };
 member
@@ -181,20 +178,20 @@ typeName
 	returns[types::Type v]:
 	typeBase {$v = $typeBase.v;} (
 		'[' ']' {
-			$v = Type::from(types::PointerType{element_type: Box::new((&$v).to_owned())});
+			$v = Type::Pointer{element_type: Box::new((&$v).to_owned())};
 		}
 		| '[' INTEGER ']' {
-			$v = Type::from(types::ArrayType{element_type: Box::new((&$v).to_owned()), size: str::parse::<usize>($INTEGER.text).unwrap()});
+			$v = Type::Array{element_type: Box::new((&$v).to_owned()), size: str::parse::<usize>($INTEGER.text).unwrap()};
 		}
 		| '*' {
-			$v = Type::from(types::PointerType{element_type: Box::new((&$v).to_owned())});
+			$v = Type::Pointer{element_type: Box::new((&$v).to_owned())};
 		}
 		| '(' paramtypes ')' {
-			$v = Type::from(types::FunctionType{
+			$v = Type::Function{
 				return_type: Box::new((&$v).to_owned()),
 				parameters: $paramtypes.v.0.clone(),
 				variadic: $paramtypes.v.1,
-			});
+			};
 		}
 	)*;
 paramtypes
@@ -220,28 +217,28 @@ paramtypes
 paramtype
 	returns[types::Type v]:
 	CHAR {
-		$v = types::Type::Integer(types::IntegerType{size: 8, signed: true});
+		$v = types::Type::Integer{size: 8, signed: true};
 	}
 	| SHORT {
-		$v = types::Type::Integer(types::IntegerType{size: 16, signed: true});
+		$v = types::Type::Integer{size: 16, signed: true};
 	}
 	| INT {
-		$v = types::Type::Integer(types::IntegerType{size: 32, signed: true});
+		$v = types::Type::Integer{size: 32, signed: true};
 	}
 	| LONG {
-		$v = types::Type::Integer(types::IntegerType{size: 64, signed: true});
+		$v = types::Type::Integer{size: 64, signed: true};
 	}
 	| UNSIGNED CHAR {
-		$v = types::Type::Integer(types::IntegerType{size: 8, signed: false});
+		$v = types::Type::Integer{size: 8, signed: false};
 	}
 	| UNSIGNED SHORT {
-		$v = types::Type::Integer(types::IntegerType{size: 16, signed: false});
+		$v = types::Type::Integer{size: 16, signed: false};
 	}
 	| UNSIGNED INT {
-		$v = types::Type::Integer(types::IntegerType{size: 32, signed: false});
+		$v = types::Type::Integer{size: 32, signed: false};
 	}
 	| UNSIGNED LONG {
-		$v = types::Type::Integer(types::IntegerType{size: 64, signed: false});
+		$v = types::Type::Integer{size: 64, signed: false};
 	}
 	| STRUCT n = IDENTIFIER {
 		let t = match recog.getType(&$n.text) {
@@ -269,28 +266,28 @@ typeBase
 		$v = types::Type::Void;
 	}
 	| CHAR {
-		$v = types::Type::Integer(types::IntegerType{size: 8, signed: true});
+		$v = types::Type::Integer{size: 8, signed: true};
 	}
 	| SHORT {
-		$v = types::Type::Integer(types::IntegerType{size: 16, signed: true});
+		$v = types::Type::Integer{size: 16, signed: true};
 	}
 	| INT {
-		$v = types::Type::Integer(types::IntegerType{size: 32, signed: true});
+		$v = types::Type::Integer{size: 32, signed: true};
 	}
 	| LONG {
-		$v = types::Type::Integer(types::IntegerType{size: 64, signed: true});
+		$v = types::Type::Integer{size: 64, signed: true};
 	}
 	| UNSIGNED CHAR {
-		$v = types::Type::Integer(types::IntegerType{size: 8, signed: false});
+		$v = types::Type::Integer{size: 8, signed: false};
 	}
 	| UNSIGNED SHORT {
-		$v = types::Type::Integer(types::IntegerType{size: 16, signed: false});
+		$v = types::Type::Integer{size: 16, signed: false};
 	}
 	| UNSIGNED INT {
-		$v = types::Type::Integer(types::IntegerType{size: 32, signed: false});
+		$v = types::Type::Integer{size: 32, signed: false};
 	}
 	| UNSIGNED LONG {
-		$v = types::Type::Integer(types::IntegerType{size: 64, signed: false});
+		$v = types::Type::Integer{size: 64, signed: false};
 	}
 	| STRUCT n = IDENTIFIER {
 		let t = match recog.getType(&$n.text) {
@@ -403,30 +400,22 @@ primary
 		types::Type t,
 	]:
 	INTEGER {
-		$t = types::Type::Integer(
-			types::IntegerType{
-				signed: true,
-				size: 64,
-			}
-		);
+		$t = types::Type::Integer{
+			signed: true,
+			size: 64,
+		};
 	}
 	| CHAR_LITERAL {
-		$t = types::Type::Integer(
-			types::IntegerType{
-				signed: true,
-				size: 8,
-			}
-		);
+		$t = types::Type::Integer{
+			signed: true,
+			size: 8,
+		};
 	}
 	| STRING_LITERAL {
-		$t = types::Type::Pointer(
-				types::Type::Integer(
-				types::IntegerType{
-					signed: true,
-					size: 8,
-				}
-			).pointer_type()
-		);
+		$t =  types::Type::Integer{
+			signed: true,
+			size: 8,
+		}.pointer_type();
 	}
 	| IDENTIFIER {
 		
