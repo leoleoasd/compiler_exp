@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::fmt::Display;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -9,11 +7,12 @@ use antlr_rust::token::GenericToken;
 use antlr_rust::token::Token;
 use antlr_rust::{error_listener::ErrorListener, recognizer::Recognizer};
 use bit_set::BitSet;
-use codespan_reporting::diagnostic::{self, Diagnostic, Label};
+use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use quick_error::quick_error;
+use rustc_lexer::unescape::EscapeError;
 pub struct CodeSpanListener<T> {
     file: SimpleFile<String, String>,
     code: String,
@@ -42,6 +41,10 @@ quick_error! {
         VariableNotFound(name: String) {
             display("Variable {} not found", name)
         }
+        InvalidEscapeSequence(text: String, err: EscapeError) {
+            display("Invalid escape sequence: {}, {:?}", text, err)
+            context(text: String, err: EscapeError) -> (text, err)
+        }
     }
 }
 
@@ -64,7 +67,17 @@ impl ParserError {
                 .with_message(format!("Variable {name} not found"))
                 .with_labels(vec![Label::primary(file_id.clone(), range)
                     .with_message(format!("Variable {name} not found"))]),
+            ParserError::InvalidEscapeSequence(text, err) => Diagnostic::error()
+                .with_message(format!("Invalid escape sequence: {text} {err:?}"))
+                .with_labels(vec![Label::primary(file_id.clone(), range)
+                    .with_message(format!("Invalid escape sequence: {text} {err:?}"))]),
         }
+    }
+}
+
+impl From<ParserError> for ANTLRError {
+    fn from(err: ParserError) -> Self {
+        ANTLRError::FallThrough(Rc::new(err))
     }
 }
 

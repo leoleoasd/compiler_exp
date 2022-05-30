@@ -1,16 +1,14 @@
 #![feature(try_blocks)]
+#![allow(dead_code)]
+#![allow(unused_variables)]
 
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token_stream::TokenStream;
 use antlr_rust::Parser;
-use antlr_rust::{
-    int_stream::IntStream, token::Token, token_stream::UnbufferedTokenStream, InputStream,
-};
+use antlr_rust::{int_stream::IntStream, token::Token, InputStream};
 use clap::Parser as ClapParser;
 use parser::cbparser::CbParser;
 use parser::errors::CodeSpanListener;
-use std::error::Error;
-use std::fmt::Display;
 use std::{
     io,
     ops::Deref,

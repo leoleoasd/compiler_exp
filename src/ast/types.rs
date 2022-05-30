@@ -1,4 +1,4 @@
-use std::{boxed::Box, collections::HashMap};
+use std::boxed::Box;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {

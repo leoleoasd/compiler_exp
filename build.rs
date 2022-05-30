@@ -1,7 +1,7 @@
 #![feature(exit_status_error)]
 use std::env;
 use std::error::Error;
-use std::process::{Command, ExitCode};
+use std::process::Command;
 
 fn main() {
     gen_for_grammar().unwrap();

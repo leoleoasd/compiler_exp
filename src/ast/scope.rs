@@ -1,14 +1,7 @@
 use crate::ast::types::Type;
 use crate::parser::errors::ParserError;
-use std::cell::{Ref, RefCell};
-use std::error::Error;
-use std::fmt::{self, Debug, Display, Formatter};
-use std::{
-    collections::HashMap,
-    marker::PhantomData,
-    ops::{Range, Sub},
-    rc::Rc,
-};
+use std::cell::RefCell;
+use std::{collections::HashMap, ops::Range, rc::Rc};
 
 #[derive(Debug)]
 pub struct Entity {
@@ -54,7 +47,7 @@ impl Scope {
         }
         None
     }
-    pub fn defineVariable(
+    pub fn define_variable(
         &mut self,
         name: &str,
         location: Range<usize>,
@@ -64,7 +57,7 @@ impl Scope {
             .last()
             .unwrap()
             .borrow_mut()
-            .defineVariable(name, location, _type)
+            .define_variable(name, location, _type)
     }
 }
 #[derive(Debug)]
@@ -83,7 +76,7 @@ impl SubScope {
     fn get(&self, name: &str) -> Option<Rc<Entity>> {
         self.entities.get(name).map(|s| s.to_owned())
     }
-    fn defineVariable(
+    fn define_variable(
         &mut self,
         name: &str,
         location: Range<usize>,

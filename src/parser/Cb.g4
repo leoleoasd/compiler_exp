@@ -2,21 +2,41 @@ grammar Cb;
 @lexer::header {
 #![allow(unused_braces)]
 #![allow(unused_parens)]
+#![allow(unused_imports)]
+#![allow(unused_macros)]
 }
 @listener::header {
 #![allow(unused_braces)]
 #![allow(unused_parens)]
+#![allow(unused_imports)]
+#![allow(unused_macros)]
 }
 @parser::header {
 #![allow(unused_braces)]
 #![allow(unused_parens)]
+#![allow(unused_imports)]
+#![allow(unused_macros)]
 use std::collections::HashMap;
 use crate::ast::types::Type;
 use crate::ast::scope::Scope;
 use crate::ast::scope::SubScope;
 use crate::ast::types;
+use crate::ast::node::Node;
+use crate::ast::expr::*;
 use std::fmt::{Formatter, Debug, Display, self};
 use crate::parser::errors::ParserError;
+use quick_error::ResultExt;
+use rustc_lexer::unescape;
+macro_rules! location_for_ctx {
+	(\$token:expr) => {
+		\$token.start().get_start() as usize .. \$token.stop().get_stop() as usize + 1
+	};
+}
+macro_rules! location_for_token {
+	(\$token:expr) => {
+		\$token.start as usize .. \$token.stop as usize + 1
+	};
+}
 }
 @parser::fields {
     pub types: HashMap<String, types::Type>,
@@ -111,13 +131,11 @@ topDef: funcDef | funcDecl | varDef | constDef | structDef;
 // TODO: support unionDef TODO: support typeDef;
 varDef:
 	s = storage t = typeName name {
-		let text = &$name.text;
-		let start = $name.start.unwrap().deref().start as usize;
-		let stop = $name.stop.unwrap().deref().stop as usize;
+		let text = &$name.text; 
 		let t = $t.v.clone();
-		let result = recog.scope.defineVariable(
+		let result = recog.scope.define_variable(
 			text, 
-			start..stop + 1, 
+			location_for_ctx!(&$name.ctx),
 			t
 		);
 		if result.is_err() {
@@ -396,26 +414,51 @@ assignmentExpr
 expr: assignmentExpr | <assoc = right> expr ',' expr;
 args: (assignmentExpr (',' assignmentExpr)*)?;
 primary
-	locals[
-		types::Type t,
-	]:
-	INTEGER {
-		$t = types::Type::Integer{
-			signed: true,
-			size: 64,
+	returns [
+		Option<Box<dyn ExprNode>> e
+	]
+	:
+	i = INTEGER {
+		let text = $i.text;
+		let num = if text == "0" {0} else {
+			if text.starts_with("0x") {
+				i64::from_str_radix(&text[2..], 16).unwrap()
+			} else if text.starts_with("0") {
+				i64::from_str_radix(&text[1..], 8).unwrap()
+			} else {
+				i64::from_str_radix(&text, 10).unwrap()
+			}
 		};
+		println!("Got integer literal {num}");
+		$e = Some(Box::new(IntegerLiteralNode::new(num, location_for_token!(
+			recog.get_current_token()
+		))) as Box<dyn ExprNode>);
 	}
-	| CHAR_LITERAL {
-		$t = types::Type::Integer{
-			signed: true,
-			size: 8,
+	| i = CHAR_LITERAL {
+		let text = $i.text;
+		let text = &text[1..text.len() - 1];
+		println!("{}", text.chars().count());
+		let text = unescape::unescape_char(text).map_err(|(_, err)| {
+			ParserError::from(quick_error::Context(text.to_string(), err))
+		});
+		let text = if text.is_err() {
+			let err = ANTLRError::from(text.unwrap_err());
+			recog.notify_error_listeners(
+				format!("Invalid character literal: {}", err),
+				// last token
+				Some(recog.base.input.index() - 1),
+				Some(&err)
+			);
+			return Err(err);
+		} else {
+			text.unwrap()
 		};
+		println!("Got char literal {text}");
+		$e = Some(Box::new(CharLiteralNode::new(text as i8, location_for_token!(
+			recog.get_current_token()
+		))) as Box<dyn ExprNode>);
 	}
 	| STRING_LITERAL {
-		$t =  types::Type::Integer{
-			signed: true,
-			size: 8,
-		}.pointer_type();
 	}
 	| IDENTIFIER {
 		
