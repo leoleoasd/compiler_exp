@@ -1,11 +1,13 @@
-#include <stdio.ch>
+extern int printf(char *, ...);
 int b = 2;
 int main(int argc, char []* argv) {
     int a = 2;
+    char xzxc = 'a';
     int c = 0, 1, 0xaf, 077;
-    char b = '\a';
-    int c = "1asdasd";
-    char* c = "123 123";
+    int x = 1;
+    int y = 1;
+    int z = 1;
+    int t = 1;
     printf("hello %s\n", "world!");
     return 0;
 }
@@ -17,7 +19,6 @@ struct test_again{
     struct test* pointer;
     char***** b;
 };
-int c = d;
 int foo(void) {
     struct test ss;
 }

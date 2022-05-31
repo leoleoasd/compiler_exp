@@ -9,6 +9,7 @@ use antlr_rust::{int_stream::IntStream, token::Token, InputStream};
 use clap::Parser as ClapParser;
 use parser::cbparser::CbParser;
 use parser::errors::CodeSpanListener;
+use std::fs;
 use std::{
     io,
     ops::Deref,
@@ -38,10 +39,13 @@ struct Cli {
 
 fn main() {
     let cli = Cli::parse();
-    let code = Box::leak(Box::new(preprocess(&cli.name).unwrap()));
+    let code;
     if cli.preprocess {
+        code = Box::leak(Box::new(preprocess(&cli.name).unwrap()));
         println!("Preprocessed Code:");
         println!("{}", code);
+    } else {
+        code = Box::leak(Box::new(fs::read_to_string(&cli.name).unwrap()));
     }
     let mut tokens = lex(code, cli.name.clone()).unwrap();
     let mut token_vec = Vec::new();

@@ -1,9 +1,10 @@
+use super::{node::Node, scope::Entity, types::Type};
+use lazy_static::lazy_static;
 use std::ops::Range;
-
-use super::{node::Node, types::Type};
+use std::rc::Rc;
 
 pub enum ConstValue {
-    Int(i64),
+    Int(i32),
     Char(i8),
     String(String),
 }
@@ -23,81 +24,147 @@ struct BaiscExprNode {
     constant: bool,
     location: Range<usize>,
 }
-
-macro_rules! expr_impl {
-    ($t: ty, $_self: ident, addressable = $is_addressable: block, is_constant = $is_constant: block,get_const_value =  $get_const_value: block) => {
-        impl Node for $t {
-            fn get_location(& $_self) -> &Range<usize> {
-                return & $_self.basic.location;
-            }
-        }
-        impl ExprNode for $t {
-            fn get_type(& $_self) -> &Type {
-                return & $_self.basic._type;
-            }
-            fn is_addressable(& $_self) -> bool $is_addressable
-            fn is_constant(& $_self) -> bool $is_constant
-            fn get_const_value(& $_self) -> Option<ConstValue> $get_const_value
-        }
+lazy_static! {
+    static ref INT_LITERAL_TYPE: Type = Type::Integer {
+        signed: true,
+        size: 32,
     };
-    ($t: ty, $_self: ident) => {
-        expr_impl!($t, $_self, addressable = { $_self.basic.addressable }, is_constant = { $_self.basic.constant }, get_const_value = {None});
+    static ref CHAR_LITERAL_TYPE: Type = Type::Integer {
+        signed: true,
+        size: 8,
     };
-    ($t: ty, $_self: ident, get_const_value = $get_const_value: block ) => {
-        expr_impl!($t, $_self, addressable = { $_self.basic.addressable },
-            is_constant = { $_self.basic.constant }, get_const_value = $get_const_value);
-    }
+    static ref STRING_LITERAL_TYPE: Type = Type::Pointer {
+        element_type: Box::new(Type::Integer {
+            signed: true,
+            size: 8,
+        })
+    };
 }
+
 #[derive(Debug, Clone)]
 pub struct IntegerLiteralNode {
-    basic: BaiscExprNode,
-    value: i64,
+    value: i32,
+    location: Range<usize>,
 }
-expr_impl!(
-    IntegerLiteralNode,
-    self,
-    get_const_value = { Some(ConstValue::Int(self.value)) }
-);
+impl Node for IntegerLiteralNode {
+    fn get_location(&self) -> &Range<usize> {
+        return &self.location;
+    }
+}
+impl ExprNode for IntegerLiteralNode {
+    fn get_type(&self) -> &Type {
+        return &INT_LITERAL_TYPE;
+    }
+    fn is_addressable(&self) -> bool {
+        false
+    }
+    fn is_constant(&self) -> bool {
+        true
+    }
+    fn get_const_value(&self) -> Option<ConstValue> {
+        Some(ConstValue::Int(self.value))
+    }
+}
 impl IntegerLiteralNode {
-    pub fn new(val: i64, location: Range<usize>) -> Self {
+    pub fn new(val: i32, location: Range<usize>) -> Self {
         IntegerLiteralNode {
             value: val,
-            basic: BaiscExprNode {
-                _type: Type::Integer {
-                    signed: true,
-                    size: 64,
-                },
-                addressable: false,
-                constant: true,
-                location,
-            },
+            location,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct CharLiteralNode {
-    basic: BaiscExprNode,
     value: i8,
+    location: Range<usize>,
 }
-expr_impl!(
-    CharLiteralNode,
-    self,
-    get_const_value = { Some(ConstValue::Char(self.value)) }
-);
+impl Node for CharLiteralNode {
+    fn get_location(&self) -> &Range<usize> {
+        &self.location
+    }
+}
+impl ExprNode for CharLiteralNode {
+    fn get_type(&self) -> &Type {
+        &CHAR_LITERAL_TYPE
+    }
+    fn is_addressable(&self) -> bool {
+        false
+    }
+    fn is_constant(&self) -> bool {
+        true
+    }
+    fn get_const_value(&self) -> Option<ConstValue> {
+        Some(ConstValue::Char(self.value))
+    }
+}
 impl CharLiteralNode {
     pub fn new(val: i8, location: Range<usize>) -> Self {
         CharLiteralNode {
             value: val,
-            basic: BaiscExprNode {
-                _type: Type::Integer {
-                    signed: true,
-                    size: 8,
-                },
-                addressable: false,
-                constant: true,
-                location,
-            },
+            location,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StringLiteralNode {
+    value: String,
+    location: Range<usize>,
+}
+impl Node for StringLiteralNode {
+    fn get_location(&self) -> &Range<usize> {
+        &self.location
+    }
+}
+impl ExprNode for StringLiteralNode {
+    fn get_type(&self) -> &Type {
+        &STRING_LITERAL_TYPE
+    }
+    fn is_addressable(&self) -> bool {
+        false
+    }
+    fn is_constant(&self) -> bool {
+        true
+    }
+    fn get_const_value(&self) -> Option<ConstValue> {
+        Some(ConstValue::String(self.value.clone()))
+    }
+}
+impl StringLiteralNode {
+    pub fn new(val: String, location: Range<usize>) -> Self {
+        StringLiteralNode {
+            value: val,
+            location,
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub struct EntityNode {
+    entity: Rc<Entity>,
+    location: Range<usize>,
+}
+impl Node for EntityNode {
+    fn get_location(&self) -> &Range<usize> {
+        &self.location
+    }
+}
+impl ExprNode for EntityNode {
+    fn get_type(&self) -> &Type {
+        self.entity.get_type()
+    }
+    fn is_addressable(&self) -> bool {
+        true
+    }
+    fn is_constant(&self) -> bool {
+        false
+    }
+    fn get_const_value(&self) -> Option<ConstValue> {
+        None
+    }
+}
+impl EntityNode {
+    pub fn new(entity: Rc<Entity>, location: Range<usize>) -> Self {
+        EntityNode { entity, location }
     }
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::extra_unused_lifetimes)]
+
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -12,7 +14,7 @@ use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use quick_error::quick_error;
-use rustc_lexer::unescape::EscapeError;
+use snailquote::UnescapeError;
 pub struct CodeSpanListener<T> {
     file: SimpleFile<String, String>,
     code: String,
@@ -35,33 +37,46 @@ quick_error! {
         TypeNotFound(name: String) {
             display("Type {} not found", name)
         }
-        VariableRedefination(name: String, previous_index: Range<usize>) {
+        EntityNameConflict(name: String, previous_index: Range<usize>) {
             display("Variable {} exists", name)
         }
         VariableNotFound(name: String) {
             display("Variable {} not found", name)
         }
-        InvalidEscapeSequence(text: String, err: EscapeError) {
+        InvalidEscapeSequence(text: String, err: UnescapeError) {
             display("Invalid escape sequence: {}, {:?}", text, err)
-            context(text: String, err: EscapeError) -> (text, err)
+            context(text: String, err: UnescapeError) -> (text, err)
+        }
+        InvalidCharacterLiteral(text: String) {
+            display("Invalid character literal: {}", text)
+        }
+        VariableUndefined(name: String) {
+            display("Variable {} is undefined", name)
+        }
+        InvalidFunctionDefination(name: String) {
+            display("Cannot define function {} here", name)
+        }
+        DuplicateStructField(name: String,  previous_index: Range<usize>) {
+            display("Duplicate field {}", name)
         }
     }
 }
 
 impl ParserError {
     fn diagnostic<T: Clone>(&self, file_id: &T, range: impl Into<Range<usize>>) -> Diagnostic<T> {
+        let range: Range<usize> = range.into();
         match self {
             ParserError::TypeNotFound(name) => Diagnostic::error()
                 .with_message(format!("Type {name} not found"))
                 .with_labels(vec![Label::primary(file_id.clone(), range)
                     .with_message(format!("Type {name} not found"))]),
-            ParserError::VariableRedefination(name, previously_occur) => Diagnostic::error()
-                .with_message(format!("Variable {name} is already defined!"))
+            ParserError::EntityNameConflict(name, previously_occur) => Diagnostic::error()
+                .with_message(format!("Entity {name} is already defined!"))
                 .with_labels(vec![
                     Label::primary(file_id.clone(), range)
-                        .with_message(format!("Variable {name} is already defined!")),
+                        .with_message(format!("Entity {name} is already defined!")),
                     Label::secondary(file_id.clone(), previously_occur.clone())
-                        .with_message(format!("Previously defined here")),
+                        .with_message("Previously defined here".to_string()),
                 ]),
             ParserError::VariableNotFound(name) => Diagnostic::error()
                 .with_message(format!("Variable {name} not found"))
@@ -71,6 +86,30 @@ impl ParserError {
                 .with_message(format!("Invalid escape sequence: {text} {err:?}"))
                 .with_labels(vec![Label::primary(file_id.clone(), range)
                     .with_message(format!("Invalid escape sequence: {text} {err:?}"))]),
+            ParserError::InvalidCharacterLiteral(text) => Diagnostic::error()
+                .with_message(format!("Invalid character literal: {text}"))
+                .with_labels(vec![
+                    Label::primary(file_id.clone(), range.clone())
+                        .with_message(format!("Invalid character literal: {text}")),
+                    Label::secondary(file_id.clone(), range)
+                        .with_message("Note: only ASCII characters are supported"),
+                ]),
+            ParserError::VariableUndefined(name) => Diagnostic::error()
+                .with_message(format!("Variable {name} is undefined"))
+                .with_labels(vec![Label::primary(file_id.clone(), range)
+                    .with_message(format!("Variable {name} is undefined"))]),
+            ParserError::InvalidFunctionDefination(name) => Diagnostic::error()
+                .with_message(format!("Cannot define function {name} here"))
+                .with_labels(vec![Label::primary(file_id.clone(), range)
+                    .with_message(format!("Cannot define function {name} here"))]),
+            ParserError::DuplicateStructField(name, previously_occur) => Diagnostic::error()
+                .with_message(format!("Duplicate field {name}"))
+                .with_labels(vec![
+                    Label::primary(file_id.clone(), range.clone())
+                        .with_message(format!("Duplicate field {name}")),
+                    Label::secondary(file_id.clone(), previously_occur.clone())
+                        .with_message("Previously used here".to_string()),
+                ]),
         }
     }
 }

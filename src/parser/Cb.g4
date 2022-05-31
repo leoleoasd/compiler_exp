@@ -23,10 +23,11 @@ use crate::ast::scope::SubScope;
 use crate::ast::types;
 use crate::ast::node::Node;
 use crate::ast::expr::*;
+use std::ops::Range;
 use std::fmt::{Formatter, Debug, Display, self};
 use crate::parser::errors::ParserError;
+use std::sync::atomic::{AtomicIsize, Ordering};
 use quick_error::ResultExt;
-use rustc_lexer::unescape;
 macro_rules! location_for_ctx {
 	(\$token:expr) => {
 		\$token.start().get_start() as usize .. \$token.stop().get_stop() as usize + 1
@@ -35,6 +36,38 @@ macro_rules! location_for_ctx {
 macro_rules! location_for_token {
 	(\$token:expr) => {
 		\$token.start as usize .. \$token.stop as usize + 1
+	};
+}
+macro_rules! report_or_unwrap {
+	(\$result:expr, \$recog: ident) => {
+		match \$result {
+			Ok(result) => result,
+			Err(err) => {
+				let err = ANTLRError::from(err);
+				\$recog.notify_error_listeners(
+					"".to_string(),
+					// last token
+					Some(\$recog.base.input.index() - 1),
+					Some(&err)
+				);
+				return Err(err)
+			},
+		}
+	};
+	(\$result:expr, \$recog: ident, \$location: expr) => {
+		match \$result {
+			Ok(result) => result,
+			Err(err) => {
+				let err = ANTLRError::from(err);
+				\$recog.notify_error_listeners(
+					"".to_string(),
+					// last token
+					Some(\$location),
+					Some(&err)
+				);
+				return Err(err)
+			},
+		}
 	};
 }
 }
@@ -138,28 +171,86 @@ varDef:
 			location_for_ctx!(&$name.ctx),
 			t
 		);
-		if result.is_err() {
-			let name = $name.text.to_string();
-			let err = result.unwrap_err();
-			let err = ANTLRError::FallThrough(Rc::new(err));
-			recog.notify_error_listeners(
-				format!("Variable {} is defined twice", name),
-				// last token
-				Some(recog.base.input.index() - 1),
-				Some(&err)
-			);
-			return Err(err);
-		}
+		report_or_unwrap!(result, recog);
 	} ('=' init = expr)? (',' name ('=' init = expr)?)* ';';
 constDef: CONST t = typeName name '=' value = expr ';';
 funcDef:
-	s = storage ret = typeName name '(' p = params ')' body = block;
-funcDecl: EXTERN ret = typeName name '(' p = paramsDecl ')' ';';
+	s = storage ret = typeName name '(' params ')' body = block {
+		let ret_type = $ret.v;
+		let (param, variadic) = $params.v.borrow().clone();
+		let func_type = ret_type.function_type(
+			param,
+			variadic
+		);
+		let text = &$name.text;
+		let location = $s.ctx.start().get_start() as usize .. $body.ctx.start().get_start() as usize;
+		let result = recog.scope.define_function(
+			text,
+			location,
+			func_type,
+			false
+		);
+		let index = $name.ctx.start().token_index.load(Ordering::Relaxed);
+		report_or_unwrap!(result, recog, index);
+	};
+funcDecl:
+	EXTERN ret = typeName name '(' paramsDecl ')' ';' {
+		let ret_type = $ret.v;
+		let (param, variadic) = $paramsDecl.v.borrow().clone();
+		let func_type = ret_type.function_type(
+			param,
+			variadic
+		);
+		let text = &$name.text;
+		let location = $start.start as usize .. $stop.stop as usize;
+		let result = recog.scope.define_function(
+			text,
+			location,
+			func_type,
+			false
+		);
+		let index = $name.ctx.start().token_index.load(Ordering::Relaxed);
+		report_or_unwrap!(result, recog, index);
+};
 storage: STATIC?;
-params: VOID | param (',' param)* (',' '...')?;
-param: t = typeName name;
-paramsDecl: VOID | paramDecl (',' paramDecl)* (',' '...')?;
-paramDecl: t = typeName;
+params
+	returns[RefCell<(Vec<types::Type>, bool)> v]:
+	VOID
+	| param {
+	(&$v).borrow_mut().0.push($param.v.1.clone());
+} (
+		',' param {
+	(&$v).borrow_mut().0.push($param.v.1.clone());
+}
+	)* (
+		',' '...' {
+	(&$v).borrow_mut().1 = true;
+}
+	)?;
+param
+	returns[(String, Type) v]:
+	t = typeName name {
+	$v = ($name.text.to_string(), $t.v.to_owned());
+};
+paramsDecl
+	returns[RefCell<(Vec<types::Type>, bool)> v]:
+	VOID
+	| paramDecl {
+	(&$v).borrow_mut().0.push($paramDecl.v.clone());
+} (
+		',' paramDecl {
+	(&$v).borrow_mut().0.push($paramDecl.v.clone());
+}
+	)* (
+		',' '...' {
+	(&$v).borrow_mut().1 = true;
+}
+	)?;
+paramDecl
+	returns[Type v]:
+	t = typeName {
+	$v = $t.v.to_owned();
+};
 block
 	returns[Option<Rc<RefCell<SubScope>>> scope]:
 	'{' {$scope = Some(recog.scope.push());} defvarList stmts '}' {recog.scope.pop();};
@@ -167,27 +258,36 @@ defvarList: vars = varDef*;
 structDef:
 	STRUCT name memberList ';' {
 	let name = $name.text.to_owned();
-	let selfType = Type::Struct{name, fields: $memberList.v.clone()};
+	let selfType = Type::Struct{name, fields: $memberList.v.borrow().clone().into_iter().map(|x| (x.0, x.1)).collect()};
 	let name = $name.text.to_owned();
     recog.registerType(name, selfType.into());
 };
 // unionDef: UNION name memberList ';' { let name = $name.text.to_owned(); let selfType =
 // types::UnionType{name, fields: $memberList.v}; recog.registerType(name, selfType.into()); };
 memberList
-	returns[Vec<(String, types::Type)> v]:
+	returns[RefCell<Vec<(String, types::Type, Range<usize>)>> v]:
 	'{' (
 		m = member {
-		let mut vclone = (&$v).clone();
-		vclone.push($m.v.clone());
-		$v = vclone;
+		let v = $m.v.clone();
+		report_or_unwrap!((&$v).borrow().iter().try_for_each(|x| -> Result<(), ParserError> {
+			if x.0 == v.0 {
+				Err(ParserError::DuplicateStructField(
+					v.0.to_string(),
+					x.2.clone()
+				))
+			} else {
+				Ok(())
+			}
+		}), recog);
+		(&$v).borrow_mut().push(v);
 	} ';'
 	)* '}' {
 	
 };
 member
-	returns[(String, types::Type) v]:
+	returns[(String, types::Type, Range<usize>) v]:
 	t = typeName name {
-	$v = ($name.text.to_owned(), $t.v.to_owned());
+	$v = ($name.text.to_owned(), $t.v.to_owned(), location_for_ctx!(&$name.ctx));
 };
 // typeDef: TYPEDEF typeName name ';' { let name = $name.text.to_owned(); let selfType =
 // type::Type::Named( type::Type::NamedType( type::Type::TypeDefType(name), ) )
@@ -361,6 +461,9 @@ breakStmt: BREAK ';';
 continueStmt: CONTINUE ';';
 returnStmt: RETURN expr? ';';
 assignmentExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]
 	locals[
     bool hasAddress,
     bool valueType,
@@ -411,25 +514,30 @@ assignmentExpr
 		| '^='
 		| '|='
 	) assignmentExpr # assign;
-expr: assignmentExpr | <assoc = right> expr ',' expr;
+expr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: assignmentExpr {
+		$e = $assignmentExpr.e;
+	} | <assoc = right> expr ',' expr {
+		todo!();
+	};
 args: (assignmentExpr (',' assignmentExpr)*)?;
 primary
-	returns [
+	returns[
 		Option<Box<dyn ExprNode>> e
-	]
-	:
+	]:
 	i = INTEGER {
 		let text = $i.text;
 		let num = if text == "0" {0} else {
 			if text.starts_with("0x") {
-				i64::from_str_radix(&text[2..], 16).unwrap()
+				i32::from_str_radix(&text[2..], 16).unwrap()
 			} else if text.starts_with("0") {
-				i64::from_str_radix(&text[1..], 8).unwrap()
+				i32::from_str_radix(&text[1..], 8).unwrap()
 			} else {
-				i64::from_str_radix(&text, 10).unwrap()
+				i32::from_str_radix(&text, 10).unwrap()
 			}
 		};
-		println!("Got integer literal {num}");
 		$e = Some(Box::new(IntegerLiteralNode::new(num, location_for_token!(
 			recog.get_current_token()
 		))) as Box<dyn ExprNode>);
@@ -437,30 +545,45 @@ primary
 	| i = CHAR_LITERAL {
 		let text = $i.text;
 		let text = &text[1..text.len() - 1];
-		println!("{}", text.chars().count());
-		let text = unescape::unescape_char(text).map_err(|(_, err)| {
+		let text = "\"".to_string() + text + "\"";
+		let text = snailquote::unescape(&text).map_err(|err| {
 			ParserError::from(quick_error::Context(text.to_string(), err))
 		});
-		let text = if text.is_err() {
-			let err = ANTLRError::from(text.unwrap_err());
+		let text = report_or_unwrap!(text, recog);
+		assert_eq!(text.chars().count(), 1);
+		let ch = text.chars().next().unwrap();
+		if !ch.is_ascii() {
+			let err = ANTLRError::from(
+				ParserError::InvalidCharacterLiteral(text.to_string())
+			);
 			recog.notify_error_listeners(
-				format!("Invalid character literal: {}", err),
+				"".to_string(),
 				// last token
 				Some(recog.base.input.index() - 1),
 				Some(&err)
 			);
 			return Err(err);
-		} else {
-			text.unwrap()
-		};
-		println!("Got char literal {text}");
-		$e = Some(Box::new(CharLiteralNode::new(text as i8, location_for_token!(
+		}
+		$e = Some(Box::new(CharLiteralNode::new(ch as i8, location_for_token!(
 			recog.get_current_token()
 		))) as Box<dyn ExprNode>);
 	}
-	| STRING_LITERAL {
+	| i = STRING_LITERAL {
+		let text = $i.text;
+		let text = snailquote::unescape(&text).map_err(|err| {
+			ParserError::from(quick_error::Context(text.to_string(), err))
+		});
+		let text = report_or_unwrap!(text, recog);
+		$e = Some(Box::new(StringLiteralNode::new(text, location_for_token!(
+			recog.get_current_token()
+		))) as Box<dyn ExprNode>);
 	}
-	| IDENTIFIER {
-		
+	| i = IDENTIFIER {
+		// variable or function
+		let name = $i.text;
+		let entity = recog.scope.get(name).ok_or_else(|| ParserError::VariableUndefined(name.to_string()));
+		let entity = report_or_unwrap!(entity, recog);
 	}
-	| '(' expr ')';
+	| '(' expr ')' {
+		$e = $expr.e;
+	};
