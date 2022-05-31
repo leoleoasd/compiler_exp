@@ -175,7 +175,7 @@ varDef:
 	} ('=' init = expr)? (',' name ('=' init = expr)?)* ';';
 constDef: CONST t = typeName name '=' value = expr ';';
 funcDef:
-	s = storage ret = typeName name '(' params ')' body = block {
+	storage ret = typeName name '(' params ')' body = block {
 		let ret_type = $ret.v;
 		let (param, variadic) = $params.v.borrow().clone();
 		let func_type = ret_type.function_type(
@@ -183,7 +183,7 @@ funcDef:
 			variadic
 		);
 		let text = &$name.text;
-		let location = $s.ctx.start().get_start() as usize .. $body.ctx.start().get_start() as usize;
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
 		let result = recog.scope.define_function(
 			text,
 			location,
@@ -202,7 +202,7 @@ funcDecl:
 			variadic
 		);
 		let text = &$name.text;
-		let location = $start.start as usize .. $stop.stop as usize;
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
 		let result = recog.scope.define_function(
 			text,
 			location,
@@ -258,7 +258,12 @@ defvarList: vars = varDef*;
 structDef:
 	STRUCT name memberList ';' {
 	let name = $name.text.to_owned();
-	let selfType = Type::Struct{name, fields: $memberList.v.borrow().clone().into_iter().map(|x| (x.0, x.1)).collect()};
+	let location = $start.start as usize .. recog.get_current_token().stop as usize;
+	let selfType = Type::Struct{
+		name, 
+		fields: $memberList.v.borrow().clone().into_iter().map(|x| (x.0, x.1)).collect(),
+		location
+	};
 	let name = $name.text.to_owned();
     recog.registerType(name, selfType.into());
 };
@@ -441,7 +446,7 @@ stmt:
 	| switchStmt
 	| breakStmt
 	| continueStmt
-	| gotoStmt
+	// | gotoStmt // TODO: implement goto
 	| returnStmt;
 labeledStmt: IDENTIFIER ':' stmt;
 ifStmt:
@@ -456,32 +461,77 @@ caseClause: values = cases () body = caseBody;
 cases: (CASE primary ':')+;
 defaultClause: DEFAULT ':' body = caseBody;
 caseBody: (stmt)+;
-gotoStmt: GOTO IDENTIFIER ';';
+// gotoStmt: GOTO IDENTIFIER ';';
 breakStmt: BREAK ';';
 continueStmt: CONTINUE ';';
 returnStmt: RETURN expr? ';';
 assignmentExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]
-	locals[
-    bool hasAddress,
-    bool valueType,
-]:
+	]:
 	// post
-	primary (
-		'++'
-		| '--'
-		| '[' expr ']'
-		| '.' IDENTIFIER
-		| '->' IDENTIFIER // member access
-		| '(' args ')' // func call
+	p = primary {
+		$e = $p.e;
+	} (
+		'++' {
+			let inner_expr = (&$e).clone().unwrap();
+			$e = Some(Box::new(
+				report_or_unwrap!(
+					PostfixExprNode::new_inc(inner_expr, location_for_token!(recog.get_current_token()))
+					,recog)
+			)  as Box<dyn ExprNode>);
+		}
+		| '--' {
+			let inner_expr = (&$e).clone().unwrap();
+			$e = Some(Box::new(
+				report_or_unwrap!(
+					PostfixExprNode::new_dec(inner_expr, location_for_token!(recog.get_current_token()))
+					,recog)
+			)  as Box<dyn ExprNode>);
+		}
+		| '[' expr ']' {
+			let inner_expr = (&$e).clone().unwrap();
+			let index_expr = ($expr.e).clone().unwrap();
+			$e = Some(Box::new(
+				report_or_unwrap!(
+					PostfixExprNode::new_index(inner_expr, index_expr, location_for_token!(recog.get_current_token()))
+					,recog)
+			)  as Box<dyn ExprNode>);
+		}
+		| '.' i = IDENTIFIER {
+			let inner_expr = (&$e).clone().unwrap();
+			let field =  $i.text.to_string();
+			$e = Some(Box::new(
+				report_or_unwrap!(
+					PostfixExprNode::new_member_of(inner_expr, field, location_for_token!(recog.get_current_token()))
+					,recog)
+			)  as Box<dyn ExprNode>);
+		}
+		| '->' i = IDENTIFIER { // member access 
+			let inner_expr = (&$e).clone().unwrap();
+			let field =  $i.text.to_string();
+			$e = Some(Box::new(
+				report_or_unwrap!(
+					PostfixExprNode::new_member_of_pointer(inner_expr, field, location_for_token!(recog.get_current_token()))
+					,recog)
+			)  as Box<dyn ExprNode>);
+		}
+		| '(' args ')' {// func call
+			let func = (&$e).clone().unwrap();
+			let args = ($args.v).borrow().clone().into_iter().map(|e| e.unwrap()).collect();
+			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+			$e = Some(Box::new(
+				report_or_unwrap!(
+					PostfixExprNode::new_func_call(func, args, location)
+					,recog)
+			)  as Box<dyn ExprNode>);
+		}
 	)* # postfixOp
 	|
 	// unary
 	('++' | '--' | '+' | '-' | '!' | '~' | '*' | '&') assignmentExpr	# unaryOp
-	| (SIZEOF '(' typeName ')')											# sizeofType
-	| (SIZEOF assignmentExpr)											# sizeofExpr
+	// | (SIZEOF '(' typeName ')')											# sizeofType
+	// | (SIZEOF assignmentExpr)											# sizeofExpr
 	// cast
 	| '(' typeName ')' assignmentExpr # castOp
 	// binary
@@ -520,9 +570,15 @@ expr
 	]: assignmentExpr {
 		$e = $assignmentExpr.e;
 	} | <assoc = right> expr ',' expr {
-		todo!();
+		// todo!();
 	};
-args: (assignmentExpr (',' assignmentExpr)*)?;
+args returns [
+	RefCell<Vec<Option<Box<dyn ExprNode>>>> v
+]: (assignmentExpr {
+	(&$v).borrow_mut().push($assignmentExpr.e.clone());
+} (',' assignmentExpr {
+	(&$v).borrow_mut().push($assignmentExpr.e.clone());
+})*)?;
 primary
 	returns[
 		Option<Box<dyn ExprNode>> e
@@ -583,6 +639,9 @@ primary
 		let name = $i.text;
 		let entity = recog.scope.get(name).ok_or_else(|| ParserError::VariableUndefined(name.to_string()));
 		let entity = report_or_unwrap!(entity, recog);
+		$e = Some(Box::new(EntityNode::new(entity, location_for_token!(
+			recog.get_current_token()
+		))) as Box<dyn ExprNode>);
 	}
 	| '(' expr ')' {
 		$e = $expr.e;

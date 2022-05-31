@@ -15,6 +15,8 @@ use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use quick_error::quick_error;
 use snailquote::UnescapeError;
+
+use crate::ast::types::Type;
 pub struct CodeSpanListener<T> {
     file: SimpleFile<String, String>,
     code: String,
@@ -58,6 +60,21 @@ quick_error! {
         }
         DuplicateStructField(name: String,  previous_index: Range<usize>) {
             display("Duplicate field {}", name)
+        }
+        TypeMismatch(expected: String, found: String) {
+            display("Type mismatch, expected {}, found {}", expected, found)
+        }
+        AddressableOprandRequired {
+            display("Addressable operand is required")
+        }
+        ArgumentCountMismatch(expected: usize, found: usize) {
+            display("Function call parameter count mismatch, expected {}, found {}", expected, found)
+        }
+        ArgumentTypeMismatch(index: usize, expected: String, found: String) {
+            display("Function call parameter type mismatch at {}, expected {}, found {}", index, expected, found)
+        }
+        FieldNotFound(field: String, struct_name: String, struct_location: Range<usize>) {
+            display("Field {} not found of struct {}", field, struct_name)
         }
     }
 }
@@ -109,6 +126,53 @@ impl ParserError {
                         .with_message(format!("Duplicate field {name}")),
                     Label::secondary(file_id.clone(), previously_occur.clone())
                         .with_message("Previously used here".to_string()),
+                ]),
+            ParserError::TypeMismatch(expected, found) => Diagnostic::error()
+                .with_message(format!(
+                    "Type mismatch, expected {}, found {}",
+                    expected, found
+                ))
+                .with_labels(vec![Label::primary(file_id.clone(), range).with_message(
+                    format!("Type mismatch, expected {}, found {}", expected, found),
+                )]),
+            ParserError::AddressableOprandRequired => Diagnostic::error()
+                .with_message("Addressable operand is required")
+                .with_labels(vec![Label::primary(file_id.clone(), range)
+                    .with_message("Addressable operand is required")]),
+            ParserError::ArgumentCountMismatch(expected, found) => Diagnostic::error()
+                .with_message(format!(
+                    "Function call parameter count mismatch, expected {}, found {}",
+                    expected, found
+                ))
+                .with_labels(vec![Label::primary(file_id.clone(), range).with_message(
+                    format!(
+                        "Function call parameter count mismatch, expected {}, found {}",
+                        expected, found
+                    ),
+                )]),
+            ParserError::ArgumentTypeMismatch(index, expected, found) => Diagnostic::error()
+                .with_message(format!(
+                    "Function call parameter type mismatch at {}, expected {}, found {}",
+                    index, expected, found
+                ))
+                .with_labels(vec![Label::primary(file_id.clone(), range).with_message(
+                    format!(
+                        "Function call parameter type mismatch at {}, expected {}, found {}",
+                        index, expected, found
+                    ),
+                )]),
+            ParserError::FieldNotFound(field, struct_name, struct_location) => Diagnostic::error()
+                .with_message(format!(
+                    "Field {} not found of struct {}",
+                    field, struct_name
+                ))
+                .with_labels(vec![
+                    Label::primary(file_id.clone(), range.clone()).with_message(format!(
+                        "Field {} not found of struct {}",
+                        field, struct_name
+                    )),
+                    Label::secondary(file_id.clone(), struct_location.clone())
+                        .with_message("Struct {} defined here".to_string()),
                 ]),
         }
     }

@@ -1,4 +1,4 @@
-use std::boxed::Box;
+use std::{boxed::Box, ops::Range};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
@@ -22,6 +22,7 @@ pub enum Type {
     Struct {
         name: String,
         fields: Vec<(String, Type)>,
+        location: Range<usize>,
     },
 }
 
@@ -61,7 +62,7 @@ impl Type {
             Type::Pointer { element_type } => {
                 format!("{}*", element_type.name())
             }
-            Type::Struct { name, fields } => name.clone(),
+            Type::Struct { name, .. } => name.clone(),
         }
     }
     pub fn pointer_type(&self) -> Type {
@@ -80,6 +81,23 @@ impl Type {
             return_type: Box::new(self.clone()),
             parameters,
             variadic,
+        }
+    }
+    pub fn element_type(&self) -> &Type {
+        match self {
+            Type::Array { element_type, .. } => element_type,
+            Type::Pointer { element_type } => element_type,
+            Type::Function { return_type, .. } => return_type,
+            _ => panic!("Type does not have an element type"),
+        }
+    }
+    pub fn field_type(&self, field: &str) -> Option<&Type> {
+        match self {
+            Type::Struct { fields, .. } => fields
+                .iter()
+                .find(|(name, _)| name == field)
+                .map(|(_, t)| t),
+            _ => None,
         }
     }
 }

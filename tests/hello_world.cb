@@ -1,14 +1,19 @@
 extern int printf(char *, ...);
 int b = 2;
+struct foo{
+    int bar;
+};
 int main(int argc, char []* argv) {
-    int a = 2;
-    char xzxc = 'a';
-    int c = 0, 1, 0xaf, 077;
-    int x = 1;
-    int y = 1;
-    int z = 1;
-    int t = 1;
-    printf("hello %s\n", "world!");
+    int t = 0;
+    int[5] a;
+    struct foo test_struct;
+    struct foo* test_pointer;
+    t++;
+    t--;
+    printf("%d\n", test_struct.bar);
+    printf("%d\n", test_pointer->bar);
+    printf("%d\n", test_pointer->asd);
+    a[2]++;
     return 0;
 }
 char a = '2';
