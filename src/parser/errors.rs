@@ -61,7 +61,7 @@ quick_error! {
         DuplicateStructField(name: String,  previous_index: Range<usize>) {
             display("Duplicate field {}", name)
         }
-        TypeMismatch(expected: String, found: String) {
+        TypeMismatch(expected: String, found: String, location: Range<usize>) {
             display("Type mismatch, expected {}, found {}", expected, found)
         }
         AddressableOprandRequired {
@@ -127,14 +127,16 @@ impl ParserError {
                     Label::secondary(file_id.clone(), previously_occur.clone())
                         .with_message("Previously used here".to_string()),
                 ]),
-            ParserError::TypeMismatch(expected, found) => Diagnostic::error()
+            ParserError::TypeMismatch(expected, found, location) => Diagnostic::error()
                 .with_message(format!(
                     "Type mismatch, expected {}, found {}",
                     expected, found
                 ))
-                .with_labels(vec![Label::primary(file_id.clone(), range).with_message(
-                    format!("Type mismatch, expected {}, found {}", expected, found),
-                )]),
+                .with_labels(vec![Label::primary(file_id.clone(), location.clone())
+                    .with_message(format!(
+                        "Type mismatch, expected {}, found {}",
+                        expected, found
+                    ))]),
             ParserError::AddressableOprandRequired => Diagnostic::error()
                 .with_message("Addressable operand is required")
                 .with_labels(vec![Label::primary(file_id.clone(), range)

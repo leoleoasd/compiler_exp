@@ -35,7 +35,7 @@ impl Type {
             Type::Void => "void".to_string(),
             Type::Integer { signed, size } => {
                 let mut name = "int".to_string();
-                if *signed {
+                if !*signed {
                     name.insert(0, 'u');
                 }
                 name.push_str(&size.to_string());

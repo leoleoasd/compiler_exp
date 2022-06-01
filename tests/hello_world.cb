@@ -12,8 +12,7 @@ int main(int argc, char []* argv) {
     t--;
     printf("%d\n", test_struct.bar);
     printf("%d\n", test_pointer->bar);
-    printf("%d\n", test_pointer->asd);
-    a[2]++;
+    a[2][3]++;
     return 0;
 }
 char a = '2';

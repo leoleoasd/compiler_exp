@@ -242,6 +242,7 @@ impl PostfixExprNode {
             Err(ParserError::TypeMismatch(
                 "Integer".to_string(),
                 expr.get_type().name(),
+                expr.get_location().clone(),
             ))
         }
     }
@@ -260,6 +261,7 @@ impl PostfixExprNode {
             Err(ParserError::TypeMismatch(
                 "Integer".to_string(),
                 expr.get_type().name(),
+                expr.get_location().clone(),
             ))
         }
     }
@@ -279,9 +281,11 @@ impl PostfixExprNode {
                 Err(ParserError::AddressableOprandRequired)
             }
         } else {
+            println!("{expr:?}");
             Err(ParserError::TypeMismatch(
                 "Array".to_string(),
                 expr.get_type().name(),
+                expr.get_location().clone(),
             ))
         }
     }
@@ -315,6 +319,7 @@ impl PostfixExprNode {
             Err(ParserError::TypeMismatch(
                 "Struct".to_string(),
                 expr.get_type().name(),
+                expr.get_location().clone(),
             ))
         }
     }
@@ -352,12 +357,14 @@ impl PostfixExprNode {
                 Err(ParserError::TypeMismatch(
                     "Pointer of Struct".to_string(),
                     t.name(),
+                    expr.get_location().clone(),
                 ))
             }
         } else {
             Err(ParserError::TypeMismatch(
                 "Pointer of Struct".to_string(),
                 expr.get_type().name(),
+                expr.get_location().clone(),
             ))
         }
     }
@@ -396,6 +403,7 @@ impl PostfixExprNode {
             Err(ParserError::TypeMismatch(
                 "Func".to_string(),
                 expr.get_type().name(),
+                expr.get_location().clone(),
             ))
         }
     }

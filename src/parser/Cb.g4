@@ -475,44 +475,49 @@ assignmentExpr
 	} (
 		'++' {
 			let inner_expr = (&$e).clone().unwrap();
+			let location = $start.start as usize .. recog.get_current_token().stop as usize;
 			$e = Some(Box::new(
 				report_or_unwrap!(
-					PostfixExprNode::new_inc(inner_expr, location_for_token!(recog.get_current_token()))
+					PostfixExprNode::new_inc(inner_expr, location)
 					,recog)
 			)  as Box<dyn ExprNode>);
 		}
 		| '--' {
 			let inner_expr = (&$e).clone().unwrap();
+			let location = $start.start as usize .. recog.get_current_token().stop as usize;
 			$e = Some(Box::new(
 				report_or_unwrap!(
-					PostfixExprNode::new_dec(inner_expr, location_for_token!(recog.get_current_token()))
+					PostfixExprNode::new_dec(inner_expr, location)
 					,recog)
 			)  as Box<dyn ExprNode>);
 		}
 		| '[' expr ']' {
 			let inner_expr = (&$e).clone().unwrap();
 			let index_expr = ($expr.e).clone().unwrap();
+			let location = $start.start as usize .. recog.get_current_token().stop as usize;
 			$e = Some(Box::new(
 				report_or_unwrap!(
-					PostfixExprNode::new_index(inner_expr, index_expr, location_for_token!(recog.get_current_token()))
+					PostfixExprNode::new_index(inner_expr, index_expr, location)
 					,recog)
 			)  as Box<dyn ExprNode>);
 		}
 		| '.' i = IDENTIFIER {
 			let inner_expr = (&$e).clone().unwrap();
+			let location = $start.start as usize .. recog.get_current_token().stop as usize;
 			let field =  $i.text.to_string();
 			$e = Some(Box::new(
 				report_or_unwrap!(
-					PostfixExprNode::new_member_of(inner_expr, field, location_for_token!(recog.get_current_token()))
+					PostfixExprNode::new_member_of(inner_expr, field, location)
 					,recog)
 			)  as Box<dyn ExprNode>);
 		}
 		| '->' i = IDENTIFIER { // member access 
 			let inner_expr = (&$e).clone().unwrap();
+			let location = $start.start as usize .. recog.get_current_token().stop as usize;
 			let field =  $i.text.to_string();
 			$e = Some(Box::new(
 				report_or_unwrap!(
-					PostfixExprNode::new_member_of_pointer(inner_expr, field, location_for_token!(recog.get_current_token()))
+					PostfixExprNode::new_member_of_pointer(inner_expr, field, location)
 					,recog)
 			)  as Box<dyn ExprNode>);
 		}
