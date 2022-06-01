@@ -1,4 +1,4 @@
-use std::{ops::Range, sync::Arc};
+use std::{cmp::max, ops::Range, sync::Arc};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
@@ -62,23 +62,23 @@ impl Type {
             Type::Pointer { element_type } => {
                 format!("{}*", element_type.name())
             }
-            Type::Struct { name, .. } => name.clone(),
+            Type::Struct { name, .. } => format!("struct {name}"),
         }
     }
     pub fn pointer_type(s: Arc<Self>) -> Arc<Type> {
         Arc::new(Type::Pointer {
-            element_type: s.clone(),
+            element_type: s,
         })
     }
     pub fn array_type(s: Arc<Self>, size: usize) -> Arc<Type> {
         Arc::new(Type::Array {
             size,
-            element_type: s.clone(),
+            element_type: s,
         })
     }
     pub fn function_type(s: Arc<Self>, parameters: Vec<Arc<Type>>, variadic: bool) -> Arc<Type> {
         Arc::new(Type::Function {
-            return_type: s.clone(),
+            return_type: s,
             parameters,
             variadic,
         })
@@ -126,6 +126,44 @@ impl Type {
             (Type::Integer { .. }, Type::Pointer { .. }) => true,
             _ => false,
         }
+    }
+    pub fn binary_cast(lhs: Arc<Type>, rhs: Arc<Type>) -> Option<Arc<Type>> {
+        if lhs == rhs {
+            return Some(rhs);
+        }
+        match (&*lhs, &*rhs) {
+            (
+                Type::Integer {
+                    signed: signed1,
+                    size: size1,
+                },
+                Type::Integer {
+                    signed: signed2,
+                    size: size2,
+                },
+            ) => Some(Arc::new(Type::Integer {
+                signed: *signed1 && *signed2,
+                size: max(*size1, *size2),
+            })),
+            (Type::Pointer { .. }, Type::Integer { .. }) => Some(lhs.clone()),
+            (Type::Integer { .. }, Type::Pointer { .. }) => Some(rhs.clone()),
+            _ => None,
+        }
+    }
+    pub fn is_integer(&self) -> bool {
+        matches!(self, Type::Integer { .. })
+    }
+    pub fn is_array(&self) -> bool {
+        matches!(self, Type::Array { .. })
+    }
+    pub fn is_function(&self) -> bool {
+        matches!(self, Type::Function { .. })
+    }
+    pub fn is_pointer(&self) -> bool {
+        matches!(self, Type::Pointer { .. })
+    }
+    pub fn is_struct(&self) -> bool {
+        matches!(self, Type::Struct { .. })
     }
 }
 

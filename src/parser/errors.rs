@@ -80,6 +80,9 @@ quick_error! {
         IncapableTypeCast(from: String, to: String) {
             display("Cannot cast {} to {}", from, to)
         }
+        InvalidOperation(location: Range<usize>) {
+            display("Invalid operation")
+        }
     }
 }
 
@@ -184,6 +187,10 @@ impl ParserError {
                 .with_message(format!("Cannot cast {} to {}", from, to))
                 .with_labels(vec![Label::primary(file_id.clone(), range)
                     .with_message(format!("Cannot cast {} to {}", from, to))]),
+            ParserError::InvalidOperation(location) => Diagnostic::error()
+                .with_message("Invalid operation")
+                .with_labels(vec![Label::primary(file_id.clone(), location.clone())
+                    .with_message("Invalid operation")]),
         }
     }
 }

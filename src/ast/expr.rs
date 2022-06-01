@@ -706,9 +706,357 @@ impl ExprNode for BinaryExprNode {
         false
     }
     fn is_constant(&self) -> bool {
+        // todo: Support constant
         false
     }
     fn get_const_value(&self) -> Option<ConstValue> {
         None
+    }
+}
+impl BinaryExprNode {
+    pub fn new_add(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // allow adding integer and integer with pointers
+        if Type::binary_cast(lhs.get_type(), rhs.get_type()).is_some() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Add,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_sub(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // allow subtracting integer and integer with pointers
+        if Type::binary_cast(lhs.get_type(), rhs.get_type()).is_some() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Sub,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_mul(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // only allow integer
+        if lhs.get_type().is_integer() && rhs.get_type().is_integer() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Mul,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_div(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // only allow integer
+        if lhs.get_type().is_integer() && rhs.get_type().is_integer() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Div,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_mod(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // only allow integer
+        if lhs.get_type().is_integer() && rhs.get_type().is_integer() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Mod,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_shl(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // only allow integer
+        if lhs.get_type().is_integer() && rhs.get_type().is_integer() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Shl,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_shr(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // only allow integer
+        if lhs.get_type().is_integer() && rhs.get_type().is_integer() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Shr,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_and(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // only allow integer
+        if lhs.get_type().is_integer() && rhs.get_type().is_integer() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::And,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_or(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // only allow integer
+        if lhs.get_type().is_integer() && rhs.get_type().is_integer() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Or,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_xor(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // only allow integer
+        if lhs.get_type().is_integer() && rhs.get_type().is_integer() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Xor,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_eq(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        if lhs.get_type() == rhs.get_type()
+            || (lhs.get_type().is_integer() && rhs.get_type().is_integer())
+        {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Eq,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_ne(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        if lhs.get_type() == rhs.get_type()
+            || (lhs.get_type().is_integer() && rhs.get_type().is_integer())
+        {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Ne,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_lt(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        if (lhs.get_type().is_integer() && rhs.get_type().is_integer())
+            || (lhs.get_type().is_pointer() && rhs.get_type().is_pointer())
+        {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Lt,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_gt(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        if (lhs.get_type().is_integer() && rhs.get_type().is_integer())
+            || (lhs.get_type().is_pointer() && rhs.get_type().is_pointer())
+        {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Gt,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_le(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        if (lhs.get_type().is_integer() && rhs.get_type().is_integer())
+            || (lhs.get_type().is_pointer() && rhs.get_type().is_pointer())
+        {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Le,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_ge(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        if (lhs.get_type().is_integer() && rhs.get_type().is_integer())
+            || (lhs.get_type().is_pointer() && rhs.get_type().is_pointer())
+        {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::Ge,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_logical_and(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        if lhs.get_type().is_integer() && rhs.get_type().is_integer() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::LogicalAnd,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+    pub fn new_logical_or(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        if lhs.get_type().is_integer() && rhs.get_type().is_integer() {
+            return Ok(BinaryExprNode {
+                lhs,
+                rhs,
+                op: BinaryOp::LogicalOr,
+                location,
+            });
+        }
+        Err(ParserError::InvalidOperation(location))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CondExprNode {
+    pub cond: Box<dyn ExprNode>,
+    pub then_expr: Box<dyn ExprNode>,
+    pub else_expr: Box<dyn ExprNode>,
+    pub location: Range<usize>,
+}
+impl Node for CondExprNode {
+    fn get_location(&self) -> &std::ops::Range<usize> {
+        &self.location
+    }
+}
+impl ExprNode for CondExprNode {
+    fn get_type(&self) -> Arc<Type> {
+        self.then_expr.get_type()
+    }
+
+    fn is_addressable(&self) -> bool {
+        // todo
+        false
+    }
+
+    fn is_constant(&self) -> bool {
+        false
+    }
+
+    fn get_const_value(&self) -> Option<ConstValue> {
+        None
+    }
+}
+impl CondExprNode {
+    pub fn new(
+        cond: Box<dyn ExprNode>,
+        then_expr: Box<dyn ExprNode>,
+        else_expr: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        if then_expr.get_type() != else_expr.get_type() {
+            return Err(ParserError::TypeMismatch(
+                then_expr.get_type().name(),
+                else_expr.get_type().name(),
+                else_expr.get_location().clone(),
+            ));
+        }
+        Ok(CondExprNode {
+            cond,
+            then_expr,
+            else_expr,
+            location,
+        })
     }
 }

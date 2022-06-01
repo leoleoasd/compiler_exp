@@ -629,71 +629,260 @@ castExpr
 mulDivExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: castExpr ( '*' castExpr | '/' castExpr | '%' castExpr)*;
+	]: castExpr {
+		$e = $castExpr.e;
+	} ( '*' castExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_mul(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	} | '/' castExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_div(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	} | '%' castExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_mod(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	})*;
 addSubExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: mulDivExpr ( '+' mulDivExpr | '-' mulDivExpr)*;
+	]: mulDivExpr {
+		$e = $mulDivExpr.e;
+	} ( '+' mulDivExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($mulDivExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_add(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	} | '-' mulDivExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($mulDivExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_sub(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	})*;
 shiftExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: addSubExpr ( '<<' addSubExpr | '>>' addSubExpr)*;
+	]: addSubExpr {
+		$e = $addSubExpr.e;
+	} ( '<<' addSubExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($addSubExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_shl(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	} | '>>' addSubExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($addSubExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_shr(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	})*;
 relExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
 	]:
-	shiftExpr (
-		'<' shiftExpr
-		| '>' shiftExpr
-		| '<=' shiftExpr
-		| '>=' shiftExpr
-	)*;
+	shiftExpr {
+		$e = $shiftExpr.e;
+	} ( '<' shiftExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($shiftExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_lt(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	} | '>' shiftExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($shiftExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_gt(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	} | '<=' shiftExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($shiftExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_le(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	} | '>=' shiftExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($shiftExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_ge(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	})*;
 eqExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: relExpr ( '==' relExpr | '!=' relExpr)*;
+	]: relExpr {
+		$e = $relExpr.e;
+	} ( '==' relExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($relExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_eq(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	} | '!=' relExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($relExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_ne(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	})*;
 andExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: eqExpr ( '&' eqExpr)*;
+	]: eqExpr {
+		$e = $eqExpr.e;
+	} ( '&' eqExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($eqExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_and(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	})*;
 xorExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: andExpr ( '^' andExpr)*;
+	]: andExpr {
+		$e = $andExpr.e;
+	 } ( '^' andExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($andExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_xor(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	 })*;
 orExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: xorExpr ( '|' xorExpr)*;
+	]: xorExpr {
+		$e = $xorExpr.e;
+	} ( '|' xorExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($xorExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_or(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	})*;
 logicAndExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: orExpr ( '&&' orExpr)*;
+	]: orExpr {
+		$e = $orExpr.e;
+	} ( '&&' orExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($orExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_logical_and(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	})*;
 logicOrExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: logicAndExpr ( '||' logicAndExpr)*;
+	]: logicAndExpr {
+		$e = $logicAndExpr.e;
+	} ( '||' logicAndExpr {
+		let lhs = (&$e).clone().unwrap();
+		let rhs = ($logicAndExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				BinaryExprNode::new_logical_or(lhs, rhs, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	})*;
 condExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: logicOrExpr ( '?' expr ':' condExpr)*;
+	]: logicOrExpr {
+		$e = $logicOrExpr.e;
+	} ( '?' true_expr = logicOrExpr ':' false_expr = logicOrExpr {
+		let cond = (&$e).clone().unwrap();
+		let true_expr = ($true_expr.e).clone().unwrap();
+		let false_expr = ($false_expr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				CondExprNode::new(cond, true_expr, false_expr, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	})*;
 assignmentExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
 	]:
-	condExpr (
-		(
-			'='
-			| '*='
-			| '/='
-			| '%='
-			| '+='
-			| '-='
-			| '<<='
-			| '>>='
-			| '&='
-			| '^='
-			| '|='
-		) condExpr
+	condExpr {
+		$e = $condExpr.e;
+	} (
+		'=' condExpr
+		| '*=' condExpr
+		| '/=' condExpr
+		| '%=' condExpr
+		| '+=' condExpr
+		| '-=' condExpr
+		| '<<=' condExpr
+		| '>>=' condExpr
+		| '&=' condExpr
+		| '^=' condExpr
+		| '|=' condExpr
 	)*;
 
 // assignmentExpr
