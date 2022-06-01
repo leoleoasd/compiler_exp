@@ -9,7 +9,10 @@ int main(int argc, char []* argv) {
     struct foo test_struct;
     struct foo* test_pointer;
     *&*&t = 1 + 2 * 3 / 2 % 5 << 2;
-    t = a[0] > 2 ? 1 : test_pointer;
+    t = a[0] > 2 ? 1 : test_pointer->bar;
+    t >>= 2;
+    *(&t) = a[0] = t = t>=2;
+    t = 1,2,3;
     return 0;
 }
 struct test {

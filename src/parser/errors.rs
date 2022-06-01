@@ -181,7 +181,7 @@ impl ParserError {
                         field, struct_name
                     )),
                     Label::secondary(file_id.clone(), struct_location.clone())
-                        .with_message("Struct {} defined here".to_string()),
+                        .with_message(format!("Struct {struct_name} defined here")),
                 ]),
             ParserError::IncapableTypeCast(from, to) => Diagnostic::error()
                 .with_message(format!("Cannot cast {} to {}", from, to))

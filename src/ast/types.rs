@@ -66,9 +66,7 @@ impl Type {
         }
     }
     pub fn pointer_type(s: Arc<Self>) -> Arc<Type> {
-        Arc::new(Type::Pointer {
-            element_type: s,
-        })
+        Arc::new(Type::Pointer { element_type: s })
     }
     pub fn array_type(s: Arc<Self>, size: usize) -> Arc<Type> {
         Arc::new(Type::Array {

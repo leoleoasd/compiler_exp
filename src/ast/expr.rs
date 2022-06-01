@@ -362,7 +362,7 @@ impl PostfixExprNode {
                 }
                 Ok(PostfixExprNode {
                     expr,
-                    op: PostOp::MemberOf(member),
+                    op: PostOp::MemberOfPointer(member),
                     location,
                 })
             } else {
@@ -681,6 +681,7 @@ pub enum BinaryOp {
     Ge,
     LogicalAnd,
     LogicalOr,
+    Comma,
 }
 #[derive(Debug, Clone)]
 pub struct BinaryExprNode {
@@ -699,7 +700,8 @@ impl ExprNode for BinaryExprNode {
         // return BOOLEAN_TYPE for logical operators
         match self.op {
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr => BOOLEAN_TYPE.clone(),
-            _ => self.lhs.get_type(),
+            BinaryOp::Comma => self.rhs.get_type().clone(),
+            _ => Type::binary_cast(self.lhs.get_type(), self.rhs.get_type()).unwrap(),
         }
     }
     fn is_addressable(&self) -> bool {
@@ -1006,6 +1008,19 @@ impl BinaryExprNode {
         }
         Err(ParserError::InvalidOperation(location))
     }
+    pub fn new_comma(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        // no type constraint at all
+        return Ok(BinaryExprNode {
+            lhs,
+            rhs,
+            op: BinaryOp::Comma,
+            location,
+        });
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1056,6 +1071,96 @@ impl CondExprNode {
             cond,
             then_expr,
             else_expr,
+            location,
+        })
+    }
+}
+#[derive(Debug, Clone)]
+pub enum AssignOp {
+    Assign,
+    AddAssign,
+    SubAssign,
+    MulAssign,
+    DivAssign,
+    ModAssign,
+    ShlAssign,
+    ShrAssign,
+    AndAssign,
+    OrAssign,
+    XorAssign,
+}
+#[derive(Debug, Clone)]
+pub struct AssignExprNode {
+    pub lhs: Box<dyn ExprNode>,
+    pub rhs: Box<dyn ExprNode>,
+    pub op: AssignOp,
+    pub location: Range<usize>,
+}
+impl Node for AssignExprNode {
+    fn get_location(&self) -> &std::ops::Range<usize> {
+        &self.location
+    }
+}
+impl ExprNode for AssignExprNode {
+    fn get_type(&self) -> Arc<Type> {
+        self.lhs.get_type()
+    }
+
+    fn is_addressable(&self) -> bool {
+        false
+    }
+
+    fn is_constant(&self) -> bool {
+        false
+    }
+
+    fn get_const_value(&self) -> Option<ConstValue> {
+        None
+    }
+}
+impl AssignExprNode {
+    pub fn new(
+        lhs: Box<dyn ExprNode>,
+        rhs: Box<dyn ExprNode>,
+        op: AssignOp,
+        location: Range<usize>,
+    ) -> Result<Self, ParserError> {
+        if lhs.get_type() != rhs.get_type() {
+            return Err(ParserError::TypeMismatch(
+                lhs.get_type().name(),
+                rhs.get_type().name(),
+                rhs.get_location().clone(),
+            ));
+        }
+        match &op {
+            AssignOp::AddAssign | AssignOp::SubAssign => {
+                if Type::binary_cast(lhs.get_type(), rhs.get_type()).is_none() {
+                    return Err(ParserError::InvalidOperation(location));
+                }
+            }
+            AssignOp::MulAssign
+            | AssignOp::DivAssign
+            | AssignOp::ModAssign
+            | AssignOp::ShlAssign
+            | AssignOp::ShrAssign
+            | AssignOp::AndAssign
+            | AssignOp::OrAssign
+            | AssignOp::XorAssign => {
+                if !(lhs.get_type().is_integer() && rhs.get_type().is_integer()) {
+                    return Err(ParserError::InvalidOperation(location));
+                }
+            }
+            AssignOp::Assign => {}
+        }
+        if !lhs.is_addressable() {
+            return Err(ParserError::AddressableOprandRequired(
+                lhs.get_location().clone(),
+            ));
+        }
+        Ok(AssignExprNode {
+            lhs,
+            rhs,
+            op,
             location,
         })
     }
