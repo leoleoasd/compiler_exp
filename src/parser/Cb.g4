@@ -4,18 +4,30 @@ grammar Cb;
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 #![allow(unused_macros)]
+#![allow(clippy::redundant_static_lifetimes)]
+#![allow(clippy::identity_op)]
+#![allow(clippy::redundant_clone)]
 }
 @listener::header {
 #![allow(unused_braces)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 #![allow(unused_macros)]
+#![allow(clippy::redundant_static_lifetimes)]
+#![allow(clippy::identity_op)]
+#![allow(clippy::redundant_clone)]
 }
 @parser::header {
 #![allow(unused_braces)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 #![allow(unused_macros)]
+#![allow(clippy::redundant_static_lifetimes)]
+#![allow(clippy::identity_op)]
+#![allow(clippy::redundant_clone)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::or_fun_call)]
+#![allow(clippy::nonminimal_bool)]
 use std::collections::HashMap;
 use crate::ast::scope::Scope;
 use crate::ast::scope::SubScope;
@@ -83,7 +95,7 @@ macro_rules! report_or_unwrap {
 		self.types.insert(name, t);
 	}
 	fn getType(&self, name: &str) -> Option<Arc<Type>> {
-		self.types.get(name).map(|t| t.clone())
+		self.types.get(name).cloned()
 	}
     fn isType(&self, name: &TokenType) -> bool {
         let t = &name.text;
@@ -164,7 +176,7 @@ varDef:
 		let t = $t.v.clone();
 		let result = recog.scope.define_variable(
 			text, 
-			location_for_ctx!(&$name.ctx),
+			location_for_ctx!($name.ctx),
 			t
 		);
 		report_or_unwrap!(result, recog);
@@ -290,7 +302,7 @@ memberList
 member
 	returns[(String, Arc<Type>, Range<usize>) v]:
 	t = typeName name {
-	$v = ($name.text.to_owned(), $t.v.to_owned(), location_for_ctx!(&$name.ctx));
+	$v = ($name.text.to_owned(), $t.v.to_owned(), location_for_ctx!($name.ctx));
 };
 // typeDef: TYPEDEF typeName name ';' { let name = $name.text.to_owned(); let selfType =
 // type::Type::Named( type::Type::NamedType( type::Type::TypeDefType(name), ) )
@@ -362,8 +374,8 @@ paramtype
 		$v = Arc::new(Type::Integer{size: 64, signed: false});
 	}
 	| STRUCT n = IDENTIFIER {
-		let t = match recog.getType(&$n.text) {
-			Some(t) => t.clone(),
+		let t = match recog.getType($n.text) {
+			Some(t) => t,
 			None => {
 				let name = (&$n.text);
 				recog.notify_error_listeners(
@@ -411,7 +423,7 @@ typeBase
 		$v = Arc::new(Type::Integer{size: 64, signed: false});
 	}
 	| STRUCT n = IDENTIFIER {
-		let t = match recog.getType(&$n.text) {
+		let t = match recog.getType($n.text) {
 			Some(t) => t.clone(),
 			None => {
 				let name = (&$n.text);
@@ -1018,15 +1030,15 @@ primary
 	]:
 	i = INTEGER {
 		let text = $i.text;
-		let num = if text == "0" {0} else {
-			if text.starts_with("0x") {
-				i32::from_str_radix(&text[2..], 16).unwrap()
-			} else if text.starts_with("0") {
-				i32::from_str_radix(&text[1..], 8).unwrap()
+		let num = if text == "0" {0}
+		    else if let Some(stripped) = text.strip_prefix("0x") {
+				i32::from_str_radix(stripped, 16).unwrap()
+			} else if let Some(stripped) = text.strip_prefix('0') {
+				i32::from_str_radix(stripped, 8).unwrap()
 			} else {
-				i32::from_str_radix(&text, 10).unwrap()
-			}
-		};
+				#[allow(clippy::from_str_radix_10)]
+				i32::from_str_radix(text, 10).unwrap()
+			};
 		let location = $start.start as usize .. recog.get_current_token().stop as usize;
 		$e = Some(Box::new(IntegerLiteralNode::new(num, location)) as Box<dyn ExprNode>);
 	}
@@ -1042,7 +1054,7 @@ primary
 		let ch = text.chars().next().unwrap();
 		if !ch.is_ascii() {
 			let err = ANTLRError::from(
-				ParserError::InvalidCharacterLiteral(text.to_string())
+				ParserError::InvalidCharacterLiteral(text)
 			);
 			recog.notify_error_listeners(
 				"".to_string(),
@@ -1057,7 +1069,7 @@ primary
 	}
 	| i = STRING_LITERAL {
 		let text = $i.text;
-		let text = snailquote::unescape(&text).map_err(|err| {
+		let text = snailquote::unescape(text).map_err(|err| {
 			ParserError::from(quick_error::Context(text.to_string(), err))
 		});
 		let text = report_or_unwrap!(text, recog);

@@ -77,7 +77,7 @@ fn main() {
     tokens.seek(0);
     let token_vec = Rc::new(token_vec);
     let mut parser = CbParser::new(tokens);
-    let listener = errors::CodeSpanListener::new(&cli.name, &code, token_vec.clone());
+    let listener = errors::CodeSpanListener::new(&cli.name, code, token_vec.clone());
     parser.remove_error_listeners();
     parser.add_error_listener(Box::new(listener));
     let result = parser.compUnit().unwrap();
@@ -114,7 +114,7 @@ fn lex(
     let stream = InputStream::new(code.deref());
     let mut lexer = cblexer::CbLexer::new(stream);
     let listener: CodeSpanListener<&str> =
-        errors::CodeSpanListener::new(&name, &code, Rc::new(vec![]));
+        errors::CodeSpanListener::new(&name, code, Rc::new(vec![]));
     lexer.remove_error_listeners();
     lexer.add_error_listener(Box::new(listener));
     let token_source = CommonTokenStream::new(lexer);

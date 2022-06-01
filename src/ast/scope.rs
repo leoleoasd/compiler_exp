@@ -70,8 +70,8 @@ impl Scope {
     }
     pub fn get(&mut self, name: &str) -> Option<Arc<Entity>> {
         for s in self.stack.iter().rev() {
-            if let Some(_) = s.borrow().get(name) {
-                return Some(s.borrow().get(name).unwrap().clone());
+            if s.borrow().get(name).is_some() {
+                return Some(s.borrow().get(name).unwrap());
             }
         }
         None

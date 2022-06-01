@@ -1,6 +1,5 @@
 #![allow(clippy::extra_unused_lifetimes)]
 
-use std::borrow::Borrow;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -17,7 +16,6 @@ use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use quick_error::quick_error;
 use snailquote::UnescapeError;
 
-use crate::ast::types::Type;
 pub struct CodeSpanListener<T> {
     file: SimpleFile<String, String>,
     code: String,
@@ -129,7 +127,7 @@ impl ParserError {
             ParserError::DuplicateStructField(name, previously_occur) => Diagnostic::error()
                 .with_message(format!("Duplicate field {name}"))
                 .with_labels(vec![
-                    Label::primary(file_id.clone(), range.clone())
+                    Label::primary(file_id.clone(), range)
                         .with_message(format!("Duplicate field {name}")),
                     Label::secondary(file_id.clone(), previously_occur.clone())
                         .with_message("Previously used here".to_string()),
@@ -176,7 +174,7 @@ impl ParserError {
                     field, struct_name
                 ))
                 .with_labels(vec![
-                    Label::primary(file_id.clone(), range.clone()).with_message(format!(
+                    Label::primary(file_id.clone(), range).with_message(format!(
                         "Field {} not found of struct {}",
                         field, struct_name
                     )),

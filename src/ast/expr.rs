@@ -700,7 +700,7 @@ impl ExprNode for BinaryExprNode {
         // return BOOLEAN_TYPE for logical operators
         match self.op {
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr => BOOLEAN_TYPE.clone(),
-            BinaryOp::Comma => self.rhs.get_type().clone(),
+            BinaryOp::Comma => self.rhs.get_type(),
             _ => Type::binary_cast(self.lhs.get_type(), self.rhs.get_type()).unwrap(),
         }
     }
@@ -1014,12 +1014,12 @@ impl BinaryExprNode {
         location: Range<usize>,
     ) -> Result<Self, ParserError> {
         // no type constraint at all
-        return Ok(BinaryExprNode {
+        Ok(BinaryExprNode {
             lhs,
             rhs,
             op: BinaryOp::Comma,
             location,
-        });
+        })
     }
 }
 
