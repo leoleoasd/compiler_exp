@@ -8,14 +8,9 @@ int main(int argc, char []* argv) {
     int[5] a;
     struct foo test_struct;
     struct foo* test_pointer;
-    t++;
-    t--;
-    printf("%d\n", test_struct.bar);
-    printf("%d\n", test_pointer->bar);
-    a[2][3]++;
+    *&*&t = 1 + 2 * 3;
     return 0;
 }
-char a = '2';
 struct test {
     int a;
 };

@@ -82,8 +82,8 @@ fn main() {
     parser.add_error_listener(Box::new(listener));
     let result = parser.compUnit().unwrap();
     println!("{:?}", result);
-    println!("{:#?}", parser.types);
-    println!("{:#?}", parser.scope);
+    // println!("{:#?}", parser.types);
+    // println!("{:#?}", parser.scope);
 }
 
 fn preprocess(file: &str) -> Result<String, io::Error> {

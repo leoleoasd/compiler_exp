@@ -1,4 +1,4 @@
-use std::{boxed::Box, ops::Range};
+use std::{ops::Range, sync::Arc};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
@@ -9,19 +9,19 @@ pub enum Type {
     },
     Array {
         size: usize,
-        element_type: Box<Type>,
+        element_type: Arc<Type>,
     },
     Function {
-        return_type: Box<Type>,
-        parameters: Vec<Type>,
+        return_type: Arc<Type>,
+        parameters: Vec<Arc<Type>>,
         variadic: bool,
     },
     Pointer {
-        element_type: Box<Type>,
+        element_type: Arc<Type>,
     },
     Struct {
         name: String,
-        fields: Vec<(String, Type)>,
+        fields: Vec<(String, Arc<Type>)>,
         location: Range<usize>,
     },
 }
@@ -65,39 +65,66 @@ impl Type {
             Type::Struct { name, .. } => name.clone(),
         }
     }
-    pub fn pointer_type(&self) -> Type {
-        Type::Pointer {
-            element_type: Box::new(self.clone()),
-        }
+    pub fn pointer_type(s: Arc<Self>) -> Arc<Type> {
+        Arc::new(Type::Pointer {
+            element_type: s.clone(),
+        })
     }
-    pub fn array_type(&self, size: usize) -> Type {
-        Type::Array {
+    pub fn array_type(s: Arc<Self>, size: usize) -> Arc<Type> {
+        Arc::new(Type::Array {
             size,
-            element_type: Box::new(self.clone()),
-        }
+            element_type: s.clone(),
+        })
     }
-    pub fn function_type(&self, parameters: Vec<Type>, variadic: bool) -> Type {
-        Type::Function {
-            return_type: Box::new(self.clone()),
+    pub fn function_type(s: Arc<Self>, parameters: Vec<Arc<Type>>, variadic: bool) -> Arc<Type> {
+        Arc::new(Type::Function {
+            return_type: s.clone(),
             parameters,
             variadic,
-        }
+        })
     }
-    pub fn element_type(&self) -> &Type {
-        match self {
-            Type::Array { element_type, .. } => element_type,
-            Type::Pointer { element_type } => element_type,
-            Type::Function { return_type, .. } => return_type,
+    pub fn element_type(s: Arc<Self>) -> Arc<Type> {
+        match &*s {
+            Type::Array { element_type, .. } => element_type.clone(),
+            Type::Pointer { element_type } => element_type.clone(),
+            Type::Function { return_type, .. } => return_type.clone(),
             _ => panic!("Type does not have an element type"),
         }
     }
-    pub fn field_type(&self, field: &str) -> Option<&Type> {
-        match self {
+    pub fn field_type(s: Arc<Self>, field: &str) -> Option<Arc<Type>> {
+        match &*s {
             Type::Struct { fields, .. } => fields
                 .iter()
                 .find(|(name, _)| name == field)
-                .map(|(_, t)| t),
+                .map(|(_, t)| t.clone()),
             _ => None,
+        }
+    }
+    pub fn is_compatible(&self, other: &Type) -> bool {
+        match (self, other) {
+            (Type::Void, Type::Void) => true,
+            (Type::Integer { .. }, Type::Integer { .. }) => true,
+            (Type::Pointer { .. }, Type::Pointer { .. }) => true,
+            (
+                Type::Array { element_type, .. },
+                Type::Pointer {
+                    element_type: element_type2,
+                    ..
+                },
+            ) => element_type == element_type2,
+            (
+                Type::Pointer {
+                    element_type: element_type1,
+                    ..
+                },
+                Type::Array {
+                    element_type: element_type2,
+                    ..
+                },
+            ) => element_type1 == element_type2,
+            (Type::Pointer { .. }, Type::Integer { .. }) => true,
+            (Type::Integer { .. }, Type::Pointer { .. }) => true,
+            _ => false,
         }
     }
 }

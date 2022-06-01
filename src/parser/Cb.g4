@@ -17,10 +17,9 @@ grammar Cb;
 #![allow(unused_imports)]
 #![allow(unused_macros)]
 use std::collections::HashMap;
-use crate::ast::types::Type;
 use crate::ast::scope::Scope;
 use crate::ast::scope::SubScope;
-use crate::ast::types;
+use crate::ast::types::Type;
 use crate::ast::node::Node;
 use crate::ast::expr::*;
 use std::ops::Range;
@@ -72,7 +71,7 @@ macro_rules! report_or_unwrap {
 }
 }
 @parser::fields {
-    pub types: HashMap<String, types::Type>,
+    pub types: HashMap<String, Arc<Type>>,
 	pub scope: Scope,
 }
 @parser::init {
@@ -80,14 +79,14 @@ macro_rules! report_or_unwrap {
 	scope: Scope::new(),
 }
 @parser::members {
-	fn registerType(&mut self, name: String, t: types::Type) {
+	fn registerType(&mut self, name: String, t: Arc<Type>) {
 		println!("Registering type {}", name);
 		println!("{:?}", t);
 		self.types.insert(name, t);
 	}
-	fn getType(&self, name: &str) -> Option<&types::Type> {
+	fn getType(&self, name: &str) -> Option<Arc<Type>> {
 		println!("Getting type {}: {:?}", name, self.types.get(name));
-		self.types.get(name)
+		self.types.get(name).map(|t| t.clone())
 	}
     fn isType(&self, name: &TokenType) -> bool {
         let t = &name.text;
@@ -178,7 +177,8 @@ funcDef:
 	storage ret = typeName name '(' params ')' body = block {
 		let ret_type = $ret.v;
 		let (param, variadic) = $params.v.borrow().clone();
-		let func_type = ret_type.function_type(
+		let func_type = Type::function_type(
+			ret_type.clone(),
 			param,
 			variadic
 		);
@@ -197,7 +197,8 @@ funcDecl:
 	EXTERN ret = typeName name '(' paramsDecl ')' ';' {
 		let ret_type = $ret.v;
 		let (param, variadic) = $paramsDecl.v.borrow().clone();
-		let func_type = ret_type.function_type(
+		let func_type = Type::function_type(
+			ret_type.clone(),
 			param,
 			variadic
 		);
@@ -214,7 +215,7 @@ funcDecl:
 };
 storage: STATIC?;
 params
-	returns[RefCell<(Vec<types::Type>, bool)> v]:
+	returns[RefCell<(Vec<Arc<Type>>, bool)> v]:
 	VOID
 	| param {
 	(&$v).borrow_mut().0.push($param.v.1.clone());
@@ -228,12 +229,12 @@ params
 }
 	)?;
 param
-	returns[(String, Type) v]:
+	returns[(String, Arc<Type>) v]:
 	t = typeName name {
 	$v = ($name.text.to_string(), $t.v.to_owned());
 };
 paramsDecl
-	returns[RefCell<(Vec<types::Type>, bool)> v]:
+	returns[RefCell<(Vec<Arc<Type>>, bool)> v]:
 	VOID
 	| paramDecl {
 	(&$v).borrow_mut().0.push($paramDecl.v.clone());
@@ -247,30 +248,30 @@ paramsDecl
 }
 	)?;
 paramDecl
-	returns[Type v]:
+	returns[Arc<Type> v]:
 	t = typeName {
 	$v = $t.v.to_owned();
 };
 block
-	returns[Option<Rc<RefCell<SubScope>>> scope]:
+	returns[Option<Arc<RefCell<SubScope>>> scope]:
 	'{' {$scope = Some(recog.scope.push());} defvarList stmts '}' {recog.scope.pop();};
 defvarList: vars = varDef*;
 structDef:
 	STRUCT name memberList ';' {
 	let name = $name.text.to_owned();
 	let location = $start.start as usize .. recog.get_current_token().stop as usize;
-	let selfType = Type::Struct{
+	let selfType = Arc::new(Type::Struct{
 		name, 
 		fields: $memberList.v.borrow().clone().into_iter().map(|x| (x.0, x.1)).collect(),
 		location
-	};
+	});
 	let name = $name.text.to_owned();
-    recog.registerType(name, selfType.into());
+    recog.registerType(name, selfType);
 };
 // unionDef: UNION name memberList ';' { let name = $name.text.to_owned(); let selfType =
 // types::UnionType{name, fields: $memberList.v}; recog.registerType(name, selfType.into()); };
 memberList
-	returns[RefCell<Vec<(String, types::Type, Range<usize>)>> v]:
+	returns[RefCell<Vec<(String, Arc<Type>, Range<usize>)>> v]:
 	'{' (
 		m = member {
 		let v = $m.v.clone();
@@ -290,7 +291,7 @@ memberList
 	
 };
 member
-	returns[(String, types::Type, Range<usize>) v]:
+	returns[(String, Arc<Type>, Range<usize>) v]:
 	t = typeName name {
 	$v = ($name.text.to_owned(), $t.v.to_owned(), location_for_ctx!(&$name.ctx));
 };
@@ -298,28 +299,28 @@ member
 // type::Type::Named( type::Type::NamedType( type::Type::TypeDefType(name), ) )
 // recog.registerType(name); };
 typeName
-	returns[types::Type v]:
+	returns[Arc<Type> v]:
 	typeBase {$v = $typeBase.v;} (
 		'[' ']' {
-			$v = Type::Pointer{element_type: Box::new((&$v).to_owned())};
+			$v = Arc::new(Type::Pointer{element_type: (&$v).clone()});
 		}
 		| '[' INTEGER ']' {
-			$v = Type::Array{element_type: Box::new((&$v).to_owned()), size: str::parse::<usize>($INTEGER.text).unwrap()};
+			$v = Arc::new(Type::Array{element_type: (&$v).clone(), size: str::parse::<usize>($INTEGER.text).unwrap()});
 		}
 		| '*' {
-			$v = Type::Pointer{element_type: Box::new((&$v).to_owned())};
+			$v = Arc::new(Type::Pointer{element_type: (&$v).clone()});
 		}
 		| '(' paramtypes ')' {
-			$v = Type::Function{
-				return_type: Box::new((&$v).to_owned()),
+			$v = Arc::new(Type::Function{
+				return_type: (&$v).clone(),
 				parameters: $paramtypes.v.0.clone(),
 				variadic: $paramtypes.v.1,
-			};
+			});
 		}
 	)*;
 paramtypes
-	returns[(Vec<types::Type>, bool) v]
-	locals[bool variadic, Vec<Type> types]:
+	returns[(Vec<Arc<Type>>, bool) v]
+	locals[bool variadic, Vec<Arc<Type> > types]:
 	VOID {
 	$v = (vec![], false);
 }
@@ -338,30 +339,30 @@ paramtypes
 	$v = ((&$types).clone(), $variadic);
 };
 paramtype
-	returns[types::Type v]:
+	returns[Arc<Type>  v]:
 	CHAR {
-		$v = types::Type::Integer{size: 8, signed: true};
+		$v = Arc::new(Type::Integer{size: 8, signed: true});
 	}
 	| SHORT {
-		$v = types::Type::Integer{size: 16, signed: true};
+		$v = Arc::new(Type::Integer{size: 16, signed: true});
 	}
 	| INT {
-		$v = types::Type::Integer{size: 32, signed: true};
+		$v = Arc::new(Type::Integer{size: 32, signed: true});
 	}
 	| LONG {
-		$v = types::Type::Integer{size: 64, signed: true};
+		$v = Arc::new(Type::Integer{size: 64, signed: true});
 	}
 	| UNSIGNED CHAR {
-		$v = types::Type::Integer{size: 8, signed: false};
+		$v = Arc::new(Type::Integer{size: 8, signed: false});
 	}
 	| UNSIGNED SHORT {
-		$v = types::Type::Integer{size: 16, signed: false};
+		$v = Arc::new(Type::Integer{size: 16, signed: false});
 	}
 	| UNSIGNED INT {
-		$v = types::Type::Integer{size: 32, signed: false};
+		$v = Arc::new(Type::Integer{size: 32, signed: false});
 	}
 	| UNSIGNED LONG {
-		$v = types::Type::Integer{size: 64, signed: false};
+		$v = Arc::new(Type::Integer{size: 64, signed: false});
 	}
 	| STRUCT n = IDENTIFIER {
 		let t = match recog.getType(&$n.text) {
@@ -384,33 +385,33 @@ paramtype
 		$v = t;
 	};
 typeBase
-	returns[types::Type v]:
+	returns[Arc<Type> v]:
 	VOID {
-		$v = types::Type::Void;
+		$v = Arc::new(Type::Void);
 	}
 	| CHAR {
-		$v = types::Type::Integer{size: 8, signed: true};
+		$v = Arc::new(Type::Integer{size: 8, signed: true});
 	}
 	| SHORT {
-		$v = types::Type::Integer{size: 16, signed: true};
+		$v = Arc::new(Type::Integer{size: 16, signed: true});
 	}
 	| INT {
-		$v = types::Type::Integer{size: 32, signed: true};
+		$v = Arc::new(Type::Integer{size: 32, signed: true});
 	}
 	| LONG {
-		$v = types::Type::Integer{size: 64, signed: true};
+		$v = Arc::new(Type::Integer{size: 64, signed: true});
 	}
 	| UNSIGNED CHAR {
-		$v = types::Type::Integer{size: 8, signed: false};
+		$v = Arc::new(Type::Integer{size: 8, signed: false});
 	}
 	| UNSIGNED SHORT {
-		$v = types::Type::Integer{size: 16, signed: false};
+		$v = Arc::new(Type::Integer{size: 16, signed: false});
 	}
 	| UNSIGNED INT {
-		$v = types::Type::Integer{size: 32, signed: false};
+		$v = Arc::new(Type::Integer{size: 32, signed: false});
 	}
 	| UNSIGNED LONG {
-		$v = types::Type::Integer{size: 64, signed: false};
+		$v = Arc::new(Type::Integer{size: 64, signed: false});
 	}
 	| STRUCT n = IDENTIFIER {
 		let t = match recog.getType(&$n.text) {
@@ -465,11 +466,11 @@ caseBody: (stmt)+;
 breakStmt: BREAK ';';
 continueStmt: CONTINUE ';';
 returnStmt: RETURN expr? ';';
-assignmentExpr
+
+postfixExpr
 	returns[
 		Option<Box<dyn ExprNode>> e
 	]:
-	// post
 	p = primary {
 		$e = $p.e;
 	} (
@@ -531,59 +532,372 @@ assignmentExpr
 					,recog)
 			)  as Box<dyn ExprNode>);
 		}
-	)* # postfixOp
-	|
-	// unary
-	('++' | '--' | '+' | '-' | '!' | '~' | '*' | '&') assignmentExpr	# unaryOp
-	// | (SIZEOF '(' typeName ')')											# sizeofType
-	// | (SIZEOF assignmentExpr)											# sizeofExpr
-	// cast
-	| '(' typeName ')' assignmentExpr # castOp
-	// binary
-	| assignmentExpr ('*' | '/' | '%') assignmentExpr	# mulDiv
-	| assignmentExpr ('+' | '-') assignmentExpr			# addSub
-	| assignmentExpr ('<<' | '>>') assignmentExpr		# shift
-	| assignmentExpr '&' assignmentExpr					# and
-	| assignmentExpr '^' assignmentExpr					# xor
-	| assignmentExpr '|' assignmentExpr					# or
-	// relational
-	| assignmentExpr ('==' | '!=' | '>' | '>=' | '<' | '<=') assignmentExpr # rel
-	// logical
-	| assignmentExpr ('&&') assignmentExpr	# logicalAnd
-	| assignmentExpr ('||') assignmentExpr	# logicalOr
-	// ternary
-	| <assoc = right> assignmentExpr (
-		'?' expr ':' assignmentExpr
-	) # ternary
-	// assignment
-	| <assoc = right> assignmentExpr (
-		'='
-		| '*='
-		| '/='
-		| '%='
-		| '+='
-		| '-='
-		| '<<='
-		| '>>='
-		| '&='
-		| '^='
-		| '|='
-	) assignmentExpr # assign;
+	)*;
+unaryExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]:
+	'++' castExpr {
+		let inner_expr = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				UnaryExprNode::new_inc(inner_expr, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	}
+	| '--' castExpr {
+		let inner_expr = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				UnaryExprNode::new_dec(inner_expr, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	}
+	| '+' castExpr {
+		let inner_expr = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				UnaryExprNode::new_add(inner_expr, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	}
+	| '-' castExpr {
+		let inner_expr = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				UnaryExprNode::new_neg(inner_expr, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	}
+	| '!' castExpr {
+		let inner_expr = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				UnaryExprNode::new_logical_not(inner_expr, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	}
+	| '~' castExpr {
+		let inner_expr = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				UnaryExprNode::new_not(inner_expr, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	}
+	| '*' castExpr {
+		let inner_expr = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				UnaryExprNode::new_deref(inner_expr, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	}
+	| '&' castExpr {
+		let inner_expr = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				UnaryExprNode::new_addr(inner_expr, location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	}
+	| postfixExpr {
+		$e = $postfixExpr.e;
+	};
+castExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: '(' typeName ')' castExpr {
+		let inner_expr = ($castExpr.e).clone().unwrap();
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(
+			report_or_unwrap!(
+				CastExprNode::new(inner_expr, $typeName.v.clone(), location)
+				,recog)
+		)  as Box<dyn ExprNode>);
+	} | unaryExpr {
+		$e = $unaryExpr.e;
+	};
+mulDivExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: castExpr ( '*' castExpr | '/' castExpr | '%' castExpr)*;
+addSubExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: mulDivExpr ( '+' mulDivExpr | '-' mulDivExpr)*;
+shiftExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: addSubExpr ( '<<' addSubExpr | '>>' addSubExpr)*;
+relExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]:
+	shiftExpr (
+		'<' shiftExpr
+		| '>' shiftExpr
+		| '<=' shiftExpr
+		| '>=' shiftExpr
+	)*;
+eqExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: relExpr ( '==' relExpr | '!=' relExpr)*;
+andExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: eqExpr ( '&' eqExpr)*;
+xorExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: andExpr ( '^' andExpr)*;
+orExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: xorExpr ( '|' xorExpr)*;
+logicAndExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: orExpr ( '&&' orExpr)*;
+logicOrExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: logicAndExpr ( '||' logicAndExpr)*;
+condExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]: logicOrExpr ( '?' expr ':' condExpr)*;
+assignmentExpr
+	returns[
+		Option<Box<dyn ExprNode>> e
+	]:
+	condExpr (
+		(
+			'='
+			| '*='
+			| '/='
+			| '%='
+			| '+='
+			| '-='
+			| '<<='
+			| '>>='
+			| '&='
+			| '^='
+			| '|='
+		) condExpr
+	)*;
+
+// assignmentExpr
+// 	returns[
+// 		Option<Box<dyn ExprNode>> e
+// 	]:
+// 	// post
+// 	p = primary {
+// 		$e = $p.e;
+// 	} 
+// 	(
+// 		'++' {
+// 			let inner_expr = (&$e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					PostfixExprNode::new_inc(inner_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '--' {
+// 			let inner_expr = (&$e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					PostfixExprNode::new_dec(inner_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '[' expr ']' {
+// 			let inner_expr = (&$e).clone().unwrap();
+// 			let index_expr = ($expr.e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					PostfixExprNode::new_index(inner_expr, index_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '.' i = IDENTIFIER {
+// 			let inner_expr = (&$e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			let field =  $i.text.to_string();
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					PostfixExprNode::new_member_of(inner_expr, field, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '->' i = IDENTIFIER { // member access 
+// 			let inner_expr = (&$e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			let field =  $i.text.to_string();
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					PostfixExprNode::new_member_of_pointer(inner_expr, field, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '(' args ')' {// func call
+// 			let func = (&$e).clone().unwrap();
+// 			let args = ($args.v).borrow().clone().into_iter().map(|e| e.unwrap()).collect();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					PostfixExprNode::new_func_call(func, args, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 	)* 
+// 	# postfixOp
+// 	|
+// 	// unary
+// 	(
+// 		'++' assignmentExpr {
+// 			let inner_expr = ($assignmentExpr.e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					UnaryExprNode::new_inc(inner_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '--' assignmentExpr {
+// 			let inner_expr = ($assignmentExpr.e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					UnaryExprNode::new_dec(inner_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '+' assignmentExpr {
+// 			let inner_expr = ($assignmentExpr.e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					UnaryExprNode::new_add(inner_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '-' assignmentExpr {
+// 			let inner_expr = ($assignmentExpr.e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					UnaryExprNode::new_neg(inner_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '!' assignmentExpr {
+// 			let inner_expr = ($assignmentExpr.e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					UnaryExprNode::new_logical_not(inner_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '~' assignmentExpr {
+// 			let inner_expr = ($assignmentExpr.e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					UnaryExprNode::new_not(inner_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '*' assignmentExpr {
+// 			let inner_expr = ($assignmentExpr.e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					UnaryExprNode::new_deref(inner_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 		| '&' assignmentExpr {
+// 			let inner_expr = ($assignmentExpr.e).clone().unwrap();
+// 			let location = $start.start as usize .. recog.get_current_token().stop as usize;
+// 			$e = Some(Box::new(
+// 				report_or_unwrap!(
+// 					UnaryExprNode::new_addr(inner_expr, location)
+// 					,recog)
+// 			)  as Box<dyn ExprNode>);
+// 		}
+// 	) # unaryOp
+// 	// | (SIZEOF '(' typeName ')') # sizeofType 
+// 	// | (SIZEOF assignmentExpr) # sizeofExpr 
+// 	//cast
+// 	| '(' typeName ')' assignmentExpr # castOp
+// 	// binary
+// 	| assignmentExpr ('*' | '/' | '%') assignmentExpr	# mulDiv
+// 	| assignmentExpr ('+' | '-') assignmentExpr			# addSub
+// 	| assignmentExpr ('<<' | '>>') assignmentExpr		# shift
+// 	| assignmentExpr '&' assignmentExpr					# and
+// 	| assignmentExpr '^' assignmentExpr					# xor
+// 	| assignmentExpr '|' assignmentExpr					# or
+// 	// relational
+// 	| assignmentExpr ('==' | '!=' | '>' | '>=' | '<' | '<=') assignmentExpr # rel
+// 	// logical
+// 	| assignmentExpr ('&&') assignmentExpr	# logicalAnd
+// 	| assignmentExpr ('||') assignmentExpr	# logicalOr
+// 	// ternary
+// 	| assignmentExpr (
+// 		'?' assignmentExpr ':' assignmentExpr
+// 	) # ternary
+// 	// assignment
+// 	| <assoc = right> assignmentExpr (
+// 		'='
+// 		| '*='
+// 		| '/='
+// 		| '%='
+// 		| '+='
+// 		| '-='
+// 		| '<<='
+// 		| '>>='
+// 		| '&='
+// 		| '^='
+// 		| '|='
+// 	) assignmentExpr # assign;
 expr
 	returns[
 		Option<Box<dyn ExprNode>> e
-	]: assignmentExpr {
+	]:
+	assignmentExpr {
 		$e = $assignmentExpr.e;
-	} | <assoc = right> expr ',' expr {
-		// todo!();
-	};
-args returns [
+	}
+	(
+		',' assignmentExpr
+	)*;
+
+args
+	returns[
 	RefCell<Vec<Option<Box<dyn ExprNode>>>> v
-]: (assignmentExpr {
+]: (
+		assignmentExpr {
 	(&$v).borrow_mut().push($assignmentExpr.e.clone());
-} (',' assignmentExpr {
+} (
+			',' assignmentExpr {
 	(&$v).borrow_mut().push($assignmentExpr.e.clone());
-})*)?;
+}
+		)*
+	)?;
 primary
 	returns[
 		Option<Box<dyn ExprNode>> e
@@ -644,9 +958,8 @@ primary
 		let name = $i.text;
 		let entity = recog.scope.get(name).ok_or_else(|| ParserError::VariableUndefined(name.to_string()));
 		let entity = report_or_unwrap!(entity, recog);
-		$e = Some(Box::new(EntityNode::new(entity, location_for_token!(
-			recog.get_current_token()
-		))) as Box<dyn ExprNode>);
+		let location = $start.start as usize .. recog.get_current_token().stop as usize;
+		$e = Some(Box::new(EntityNode::new(entity, location)) as Box<dyn ExprNode>);
 	}
 	| '(' expr ')' {
 		$e = $expr.e;

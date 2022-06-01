@@ -1,5 +1,6 @@
 #![allow(clippy::extra_unused_lifetimes)]
 
+use std::borrow::Borrow;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -64,7 +65,7 @@ quick_error! {
         TypeMismatch(expected: String, found: String, location: Range<usize>) {
             display("Type mismatch, expected {}, found {}", expected, found)
         }
-        AddressableOprandRequired {
+        AddressableOprandRequired(location: Range<usize>) {
             display("Addressable operand is required")
         }
         ArgumentCountMismatch(expected: usize, found: usize) {
@@ -75,6 +76,9 @@ quick_error! {
         }
         FieldNotFound(field: String, struct_name: String, struct_location: Range<usize>) {
             display("Field {} not found of struct {}", field, struct_name)
+        }
+        IncapableTypeCast(from: String, to: String) {
+            display("Cannot cast {} to {}", from, to)
         }
     }
 }
@@ -137,9 +141,9 @@ impl ParserError {
                         "Type mismatch, expected {}, found {}",
                         expected, found
                     ))]),
-            ParserError::AddressableOprandRequired => Diagnostic::error()
+            ParserError::AddressableOprandRequired(location) => Diagnostic::error()
                 .with_message("Addressable operand is required")
-                .with_labels(vec![Label::primary(file_id.clone(), range)
+                .with_labels(vec![Label::primary(file_id.clone(), location.clone())
                     .with_message("Addressable operand is required")]),
             ParserError::ArgumentCountMismatch(expected, found) => Diagnostic::error()
                 .with_message(format!(
@@ -176,6 +180,10 @@ impl ParserError {
                     Label::secondary(file_id.clone(), struct_location.clone())
                         .with_message("Struct {} defined here".to_string()),
                 ]),
+            ParserError::IncapableTypeCast(from, to) => Diagnostic::error()
+                .with_message(format!("Cannot cast {} to {}", from, to))
+                .with_labels(vec![Label::primary(file_id.clone(), range)
+                    .with_message(format!("Cannot cast {} to {}", from, to))]),
         }
     }
 }
@@ -200,10 +208,12 @@ where
         _ambig_alts: &BitSet,
         _configs: &antlr_rust::atn_config_set::ATNConfigSet,
     ) {
+        let location = self.tokens[_start_index as usize].start as usize
+            ..self.tokens[_stop_index as usize].stop as usize;
         let diagnostic = Diagnostic::error()
-            .with_message("Found ambiguity ")
+            .with_message("Found ambiguity")
             .with_labels(vec![
-                Label::primary((), 328..331).with_message("expected `String`, found `Nat`")
+                Label::primary((), location).with_message(format!("{:?}", _ambig_alts))
             ]);
         let writer = StandardStream::stderr(ColorChoice::Always);
         let config = codespan_reporting::term::Config::default();
