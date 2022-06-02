@@ -1,4 +1,5 @@
-use std::collections::{VecDeque};
+use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -17,7 +18,7 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
-use inkwell::types::BasicTypeEnum;
+use inkwell::types::{BasicTypeEnum, BasicMetadataTypeEnum};
 use inkwell::values::{BasicValueEnum, FunctionValue, InstructionOpcode};
 use inkwell::AddressSpace;
 
@@ -60,12 +61,12 @@ where
                         self.module
                             .add_global(llvm_type, Some(AddressSpace::Local), name.as_str());
                     if let Some(init_expr) = init_expr {
-                        // TODO: check
+                        // todo check for constexpr
                         let expr = init_expr.value(self.context, &self.builder);
                         assert!(expr.is_int_value());
-                        let to_type =
-                            Type::binary_cast(_type.clone(), init_expr.get_type()).unwrap();
-                        let expr = self.cast_value(expr, _type.clone(), to_type);
+                        println!("{:?} {:?}", init_expr.get_type(), _type.clone());
+                        let expr = self.cast_value(expr, init_expr.get_type(), _type.clone());
+                        println!("expr={:?}", expr);
                         llvm_ptr.set_initializer(&expr);
                     } else {
                         llvm_ptr.set_initializer(&llvm_type.const_zero());
@@ -79,14 +80,42 @@ where
                     _extern,
                     llvm,
                 } => {
-                    todo!();
+                    let (return_type, args, variadic) = if let Type::Function {
+                        return_type,
+                        parameters,
+                        variadic,
+                    } = &**_type
+                    {
+                        (return_type, parameters, variadic)
+                    } else {
+                        unreachable!()
+                    };
+                    let param_type: Vec<BasicMetadataTypeEnum> = args.iter().map(|t| t.to_llvm_type(self.context).into()).collect();
+                    let fn_type = match &**return_type {
+                        Type::Void => self.context.void_type().fn_type(&param_type, *variadic),
+                        Type::Integer { .. } | Type::Pointer { .. } | Type::Struct { .. } => {
+                            match return_type.to_llvm_type(self.context) {
+                                BasicTypeEnum::IntType(t) => t.fn_type(&param_type, *variadic),
+                                BasicTypeEnum::PointerType(t) => t.fn_type(&param_type, *variadic),
+                                BasicTypeEnum::StructType(t) => t.fn_type(&param_type, *variadic),
+                                _ => unreachable!(),
+                            }
+                        }
+                        _ => unreachable!()
+                    };
+                    let func = self.module.add_function(name.as_str(), fn_type, 
+                    if *_extern { Some(Linkage::External) } else { None }
+                    );
+                    *llvm = Some(func);
                 }
             }
         }
         // self.visit_children(ctx);
-        self.module.print_to_stderr();
         self.module.print_to_file("test.llvm").unwrap();
-        self.module.verify().unwrap();
+        self.module.print_to_stderr();
+        self.module
+            .verify()
+            .map_err(|e| eprintln!("{}", e.to_str().unwrap())).unwrap();
     }
 
     fn cast_value(
@@ -117,16 +146,20 @@ where
                     size: size2,
                 },
             ) => {
-                if size1 > size2 {
-                    InstructionOpcode::Trunc
-                } else if size1 < size2 {
-                    if *signed1 {
-                        InstructionOpcode::SExt
-                    } else {
-                        InstructionOpcode::ZExt
-                    }
-                } else {
-                    InstructionOpcode::BitCast
+                match size1.cmp(size2) {
+                    Ordering::Equal => {
+                        InstructionOpcode::BitCast
+                    },
+                    Ordering::Greater => {
+                        InstructionOpcode::Trunc
+                    },
+                    Ordering::Less => {
+                        if *signed1 {
+                            InstructionOpcode::SExt
+                        } else {
+                            InstructionOpcode::ZExt
+                        }
+                    },
                 }
             }
             (Type::Pointer { .. }, Type::Pointer { .. }) => InstructionOpcode::BitCast,

@@ -85,8 +85,6 @@ fn main() {
     parser.remove_error_listeners();
     parser.add_error_listener(Box::new(listener));
     let result = parser.compUnit().unwrap();
-    println!("{:?}", result);
-
     let context: &'static mut Context = Box::leak(Box::new(Context::create()));
     let codegen = Box::leak(Box::new(CodeGen::new(
         context,

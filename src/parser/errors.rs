@@ -87,6 +87,9 @@ quick_error! {
         IllegalType(name: String, location: Option<Range<usize>>) {
             display("Illegal type {}", name)
         }
+        ConstantExpressionRequired(location: Range<usize>) {
+            display("Constant expression required")
+        }
     }
 }
 
@@ -207,9 +210,13 @@ impl ParserError {
                 .with_message(format!("Illegal type {name}"))
                 .with_labels(vec![Label::primary(
                     file_id.clone(),
-                    location.clone().or(Some(range)).unwrap(),
+                    location.clone().unwrap_or(range),
                 )
                 .with_message(format!("Illegal type {name}"))]),
+            ParserError::ConstantExpressionRequired(location) => Diagnostic::error()
+                .with_message("Constant expression required")
+                .with_labels(vec![Label::primary(file_id.clone(), location.clone())
+                    .with_message("Constant expression required")]),
         }
     }
 }

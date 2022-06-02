@@ -1,1 +1,4 @@
 int a = 0x1234;
+int b = 'a';
+char c = 3;
+extern printf(char*, ...);

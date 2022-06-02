@@ -192,6 +192,13 @@ varDef locals [
 	}) ? {
 		let text = &$name.text; 
 		let t = $t.v.clone();
+		if (&$init_expr).is_some() {
+			if !(&$init_expr).as_ref().unwrap().is_constant() {
+				report_or_unwrap!(Err(
+					ParserError::ConstantExpressionRequired((&$init_expr).as_ref().unwrap().get_location().clone())
+				), recog);
+			}
+		}
 		let result = recog.scope.define_variable(
 			text, 
 			location_for_ctx!($name.ctx),

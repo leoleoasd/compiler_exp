@@ -1,7 +1,7 @@
 use std::{cmp::max, ops::Range, sync::Arc};
 
 use inkwell::{
-    context::{Context},
+    context::Context,
     types::{BasicType, BasicTypeEnum},
     AddressSpace,
 };

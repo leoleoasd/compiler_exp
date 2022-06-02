@@ -3,7 +3,7 @@ use crate::parser::errors::ParserError;
 use super::{node::Node, scope::Entity, types::Type};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::values::{BasicValue, BasicValueEnum};
+use inkwell::values::{BasicValue, BasicValueEnum, PointerValue};
 use lazy_static::lazy_static;
 use std::cell::RefCell;
 use std::fmt::Debug;
@@ -26,6 +26,9 @@ pub trait ExprNode: Node {
         context: &'static Context,
         builder: &Builder<'static>,
     ) -> BasicValueEnum<'static> {
+        todo!()
+    }
+    fn addr(&self, context: &'static Context, builder: &Builder<'static>) -> PointerValue<'static> {
         todo!()
     }
 }
@@ -126,6 +129,17 @@ impl ExprNode for CharLiteralNode {
     fn get_const_value(&self) -> Option<ConstValue> {
         Some(ConstValue::Char(self.value))
     }
+    fn value(
+        &self,
+        context: &'static Context,
+        builder: &Builder<'static>,
+    ) -> BasicValueEnum<'static> {
+        self.get_type()
+            .to_llvm_type(context)
+            .into_int_type()
+            .const_int(self.value as u64, false)
+            .as_basic_value_enum()
+    }
 }
 impl CharLiteralNode {
     pub fn new(val: i8, location: Range<usize>) -> Self {
@@ -190,6 +204,22 @@ impl ExprNode for EntityNode {
     }
     fn get_const_value(&self) -> Option<ConstValue> {
         None
+    }
+    fn value(
+        &self,
+        context: &'static Context,
+        builder: &Builder<'static>,
+    ) -> BasicValueEnum<'static> {
+        let addr = self.addr(context, builder);
+        builder.build_load(addr, "load variable")
+    }
+    fn addr(&self, context: &'static Context, builder: &Builder<'static>) -> PointerValue<'static> {
+        // must be variable
+        if let Entity::Variable { llvm, .. } = &*self.entity.borrow() {
+            llvm.unwrap()
+        } else {
+            panic!("addr on function");
+        }
     }
 }
 impl EntityNode {
