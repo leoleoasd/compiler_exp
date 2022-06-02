@@ -251,9 +251,21 @@ where
             StmtContextAll::DowhileContext(_) => todo!(),
             StmtContextAll::ExprStmtContext(s) => self.gen_expr_stmt(s),
             StmtContextAll::BlockStmtContext(b) => self.gen_block(b.block().as_ref().unwrap()),
-            StmtContextAll::BreakContext(_) => todo!(),
-            StmtContextAll::ForContext(_) => todo!(),
-            StmtContextAll::ContineContext(_) => todo!(),
+            StmtContextAll::BreakContext(_) => {
+                if self.break_labels.is_empty() {
+                    panic!();
+                }
+                let break_block = self.break_labels.back().unwrap();
+                self.builder.build_unconditional_branch(*break_block);
+            },
+            StmtContextAll::ForContext(f) => self.gen_for_stmt(f.forStmt().as_ref().unwrap()),
+            StmtContextAll::ContineContext(_) => {
+                if self.continue_labels.is_empty() {
+                    panic!();
+                }
+                let continue_block = self.continue_labels.back().unwrap();
+                self.builder.build_unconditional_branch(*continue_block);
+            },
             StmtContextAll::WhileContext(_) => todo!(),
             StmtContextAll::IfContext(s) => self.gen_if_stmt(s.ifStmt().as_ref().unwrap()),
             StmtContextAll::ReturnContext(s) => {
@@ -273,6 +285,51 @@ where
             }
             StmtContextAll::Error(_) => unreachable!(),
         }
+    }
+
+    fn gen_for_stmt(&mut self, stmt: &ForStmtContext<'static>) {
+        let func = self.current_function.as_ref().unwrap().0;
+
+        let before_block = self.context.append_basic_block(func,
+            "before_block");
+        let loop_block = self.context.append_basic_block(func,
+                "for_block");
+        let step_block = self.context.append_basic_block(func,
+                "step_block");
+        let after_block = self.context.append_basic_block(func,
+                "after_block");
+
+        self.continue_labels.push_back(step_block);
+        self.break_labels.push_back(after_block);
+        
+        // gen init
+        let init = stmt.init.clone().unwrap();
+        let init = init.e.as_ref().unwrap();
+        let init = init.value(self.context, self.module, &self.builder);
+
+        self.builder.build_unconditional_branch(before_block);
+        self.builder.position_at_end(before_block);
+        
+        let cond = stmt.cond.clone().unwrap();
+        let cond = cond.e.as_ref().unwrap();
+        let cond = cond.value(self.context, self.module, &self.builder).into_int_value();
+        self.builder.build_conditional_branch(cond, loop_block, after_block);  
+
+        self.builder.position_at_end(loop_block);
+        self.gen_stmt(stmt.body.as_ref().unwrap());
+        self.builder.build_unconditional_branch(step_block);
+
+        self.builder.position_at_end(step_block);
+        let step = stmt.step.clone().unwrap();
+        let step = step.e.as_ref().unwrap();
+        let step = step.value(self.context, self.module, &self.builder);
+
+        if self.no_terminator() {
+            self.builder.build_unconditional_branch(before_block);
+        }
+        self.builder.position_at_end(after_block);
+        self.continue_labels.pop_back();
+        self.break_labels.pop_back();
     }
 
     fn gen_if_stmt(&mut self, stmt: &IfStmtContext<'static>) {
@@ -295,7 +352,10 @@ where
 
         // build else_block
         self.builder.position_at_end(else_block);
-        self.gen_stmt(stmt.elseStmt.clone().unwrap().as_ref());
+        match stmt.elseStmt.clone() {
+            Some(else_stmt) => self.gen_stmt(else_stmt.as_ref()),
+            None => {}
+        }
 
         if self.no_terminator() {
             self.builder.build_unconditional_branch(merge_block);

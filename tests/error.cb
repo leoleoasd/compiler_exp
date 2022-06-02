@@ -1,0 +1,11 @@
+struct foo{
+    int a;
+    char c;
+};
+
+int main(void) {
+    struct foo test;
+    int[2] arr;
+    arr[0] = 2;
+    printf("%d\n", arr[0]);
+}

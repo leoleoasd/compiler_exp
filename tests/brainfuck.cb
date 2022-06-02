@@ -1,0 +1,60 @@
+extern int printf(char*, ...);
+extern void putchar(char);
+extern char getchar(void);
+char[30000] s;
+char* code = "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.";
+int len = 0;
+int[100] stack;
+int stack_len=0;
+int main(int argc,char**argv)
+{
+    char c;
+    int i=0,j,k,x=0;
+    char* p=s+10000;
+    while(i<len) {
+        switch(code[i]) {
+            case '+':
+                (*p)++;
+                break;
+            case '-':
+                (*p)--;
+                break;
+            case '>':
+                p++;
+                break;
+            case '<':
+                p--;
+                break;
+            case '.':
+                putchar((int)(*p));
+                break;
+            case ',':
+                *p=getchar();
+                break;
+            case '[':
+                if(*p) {
+                    stack[stack_len++]=i;
+                } else {
+                    for(k=i,j=0;k<len;k++) {
+                        code[k]=='['&&j++;
+                        code[k]==']'&&j--;
+                        if(j==0)break;
+                    }
+                    if(j==0)
+                        i=k;
+                    else {
+                        return 3;
+                    }
+                }
+                break;
+            case ']':
+                i=stack[stack_len-- - 1]-1;
+                break;
+            default:
+                break;
+        }
+        i++;
+    }
+    printf("\n");
+    return 0;
+}

@@ -483,7 +483,7 @@ ifStmt:
 whileStmt: WHILE '(' cond = expr ')' body = stmt;
 dowhileStmt: DO body = stmt WHILE '(' cond = expr ')';
 forStmt:
-	FOR '(' init = expr ';' cond = expr ';' inc = expr ')' body = stmt;
+	FOR '(' init = expr ';' cond = expr ';' step = expr ')' body = stmt;
 switchStmt: SWITCH '(' cond = expr ')' '{' caseClauses '}';
 caseClauses: caseClause* defaultClause?;
 caseClause: values = cases () body = caseBody;

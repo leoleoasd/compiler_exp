@@ -62,9 +62,9 @@ fn main() {
         if token.get_token_type() == antlr_rust::token::TOKEN_EOF {
             break;
         }
+        token_vec.push(*token.clone());
 
         if cli.lex {
-            token_vec.push(*token.clone());
             let rule_name = if (token.get_token_type() as usize) < cblexer::_LITERAL_NAMES.len() {
                 cblexer::_LITERAL_NAMES[token.get_token_type() as usize].unwrap()
             } else {
@@ -93,6 +93,14 @@ fn main() {
         parser,
     )));
     codegen.gen(result);
+    let command = Command::new("clang")
+        .arg("test.ll")
+        .arg("-o")
+        .arg("test")
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("antlr tool failed to start")
+        .wait_with_output().unwrap();
 }
 
 fn preprocess(file: &str) -> Result<String, io::Error> {

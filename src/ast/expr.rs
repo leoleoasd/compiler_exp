@@ -513,6 +513,13 @@ impl PostfixExprNode {
         index: Box<dyn ExprNode>,
         location: Range<usize>,
     ) -> Result<Self, ParserError> {
+        if ! index.get_type().is_integer() {
+            return Err(ParserError::TypeMismatch(
+                "Integer".to_string(),
+                index.get_type().name(),
+                index.get_location().clone(),
+            ));
+        }
         if expr.get_type().is_array() || expr.get_type().is_pointer() {
             // if is array, should be addressable
             if (!expr.get_type().is_array()) || expr.is_addressable() {
@@ -527,7 +534,6 @@ impl PostfixExprNode {
                 ))
             }
         } else {
-            println!("{expr:?}");
             Err(ParserError::TypeMismatch(
                 "Array".to_string(),
                 expr.get_type().name(),
