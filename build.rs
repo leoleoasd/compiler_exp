@@ -28,12 +28,12 @@ fn gen_for_grammar() -> Result<(), Box<dyn Error>> {
         .exit_ok()
         .unwrap();
 
-    let _ = Command::new("cargo")
-        .current_dir(env::current_dir()?)
-        .arg("fmt")
-        .spawn()
-        .expect("failed to format antlr code")
-        .wait_with_output()?;
+    // let _ = Command::new("cargo")
+    //     .current_dir(env::current_dir()?)
+    //     .arg("fmt")
+    //     .spawn()
+    //     .expect("failed to format antlr code")
+    //     .wait_with_output()?;
 
     // .unwrap()
     // .stdout;

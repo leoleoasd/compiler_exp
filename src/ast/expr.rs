@@ -1,8 +1,12 @@
 use crate::parser::errors::ParserError;
 
+use super::scope::VariableEntity;
+use std::any::Any;
 use super::{node::Node, scope::Entity, types::Type};
+use inkwell::AddressSpace;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
+use inkwell::module::Module;
 use inkwell::values::{BasicValue, BasicValueEnum, PointerValue};
 use lazy_static::lazy_static;
 use std::cell::RefCell;
@@ -23,8 +27,9 @@ pub trait ExprNode: Node {
     fn get_const_value(&self) -> Option<ConstValue>;
     fn value(
         &self,
-        context: &'static Context,
-        builder: &Builder<'static>,
+            context: &'static Context,
+            module: &'static Module,
+            builder: &Builder<'static>,
     ) -> BasicValueEnum<'static> {
         todo!()
     }
@@ -87,8 +92,9 @@ impl ExprNode for IntegerLiteralNode {
     }
     fn value(
         &self,
-        context: &'static Context,
-        builder: &Builder<'static>,
+            context: &'static Context,
+            module: &'static Module,
+            builder: &Builder<'static>,
     ) -> BasicValueEnum<'static> {
         self.get_type()
             .to_llvm_type(context)
@@ -131,8 +137,9 @@ impl ExprNode for CharLiteralNode {
     }
     fn value(
         &self,
-        context: &'static Context,
-        builder: &Builder<'static>,
+            context: &'static Context,
+            module: &'static Module,
+            builder: &Builder<'static>,
     ) -> BasicValueEnum<'static> {
         self.get_type()
             .to_llvm_type(context)
@@ -173,6 +180,24 @@ impl ExprNode for StringLiteralNode {
     fn get_const_value(&self) -> Option<ConstValue> {
         Some(ConstValue::String(self.value.clone()))
     }
+    fn value(
+            &self,
+            context: &'static Context,
+            module: &'static Module,
+            builder: &Builder<'static>,
+        ) -> BasicValueEnum<'static> {
+        if builder.get_insert_block().is_some() {
+            builder.build_global_string_ptr(&self.value, "").as_basic_value_enum()
+        } else {
+            let vector = context.const_string(self.value.as_bytes(), true);
+            let ptr = module.add_global(vector.get_type(), Some(AddressSpace::Local), "");
+            ptr.set_initializer(&vector);
+            let ptr = ptr.as_pointer_value();
+            let to_ptr_type = context.i8_type().ptr_type(AddressSpace::Generic);
+            println!("TYPE {:?}", ptr.const_cast(to_ptr_type).get_type());
+            ptr.const_cast(to_ptr_type).as_basic_value_enum()
+        }
+    }
 }
 impl StringLiteralNode {
     pub fn new(val: String, location: Range<usize>) -> Self {
@@ -207,15 +232,16 @@ impl ExprNode for EntityNode {
     }
     fn value(
         &self,
-        context: &'static Context,
-        builder: &Builder<'static>,
+            context: &'static Context,
+            module: &'static Module,
+            builder: &Builder<'static>,
     ) -> BasicValueEnum<'static> {
         let addr = self.addr(context, builder);
-        builder.build_load(addr, "load variable")
+        builder.build_load(addr, &format!("load variable {}", self.entity.borrow().get_name()))
     }
     fn addr(&self, context: &'static Context, builder: &Builder<'static>) -> PointerValue<'static> {
         // must be variable
-        if let Entity::Variable { llvm, .. } = &*self.entity.borrow() {
+        if let Entity::Variable(VariableEntity { llvm, .. }) = &*self.entity.borrow() {
             llvm.unwrap()
         } else {
             panic!("addr on function");
@@ -274,6 +300,41 @@ impl ExprNode for PostfixExprNode {
     }
     fn get_const_value(&self) -> Option<ConstValue> {
         None
+    }
+    fn addr(&self, context: &'static Context, builder: &Builder<'static>) -> PointerValue<'static> {
+        todo!()
+    }
+    fn value(
+            &self,
+            context: &'static Context,
+            module: &'static Module,
+            builder: &Builder<'static>,
+        ) -> BasicValueEnum<'static> {
+        match &self.op {
+            PostOp::Inc => {
+                let expr = self.expr.value(context, module, builder);
+                let one = self.get_type().to_llvm_type(context).const_zero();
+                builder.build_int_add(expr.into_int_value(), one.into_int_value(), "inc").as_basic_value_enum()
+            },
+            PostOp::Dec => {
+                let expr = self.expr.value(context, module, builder);
+                let one = self.get_type().to_llvm_type(context).const_zero();
+                builder.build_int_sub(expr.into_int_value(), one.into_int_value(), "dec").as_basic_value_enum()
+            },
+            PostOp::FuncCall(args) => {
+                let func_entity_node = (&*self.expr as &dyn Any).downcast_ref::<EntityNode>().unwrap();
+                let args = args.iter().map(|arg| arg.value(context, module, builder).into()).collect::<Vec<_>>();
+                let ret = builder.build_call(
+                    func_entity_node.entity.borrow().as_function().llvm.unwrap(), &args, "").try_as_basic_value();
+                ret.left().or_else(|| {
+                    // is void
+                    // should not be used
+                    // so we will return a zero instead
+                    Some(context.i32_type().const_zero().as_basic_value_enum())
+                }).unwrap()
+            }
+            _ => todo!()
+        }
     }
 }
 impl PostfixExprNode {

@@ -8,5 +8,6 @@ src/parser/cblexer.rs
 src/parser/cbparser.rs
 src/parser/cblistener.rs
 src/parser/cbvisitor.rs
-test.llvm
-test.llvm.s
+test.ll
+test.ll.s
+test

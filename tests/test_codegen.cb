@@ -1,4 +1,10 @@
 int a = 0x1234;
 int b = 'a';
 char c = 3;
-extern printf(char*, ...);
+extern void printf(char*, ...);
+char * str = "Hello world from Cb lang!\n";
+
+int main(char c){
+    printf(str);
+    printf("This is %d %d\n", 2, a);
+}

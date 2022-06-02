@@ -10,39 +10,78 @@ use super::expr::ExprNode;
 
 #[derive(Debug)]
 pub enum Entity {
-    Variable {
-        name: String,
-        location: Range<usize>,
-        init_expr: Option<Box<dyn ExprNode>>,
-        _type: Arc<Type>,
-        llvm: Option<PointerValue<'static>>,
-    },
-    Function {
-        name: String,
-        location: Range<usize>,
-        _type: Arc<Type>,
-        _extern: bool,
-        llvm: Option<FunctionValue<'static>>,
-    },
+    Variable(VariableEntity),
+    Function(FunctionEntity),
 }
-
+#[derive(Debug)]
+pub struct VariableEntity {
+    pub name: String,
+    pub location: Range<usize>,
+    pub init_expr: Option<Box<dyn ExprNode>>,
+    pub _type: Arc<Type>,
+    pub llvm: Option<PointerValue<'static>>,
+}
+#[derive(Debug)]
+pub struct FunctionEntity {
+    pub name: String,
+    pub location: Range<usize>,
+    pub _type: Arc<Type>,
+    pub _extern: bool,
+    pub llvm: Option<FunctionValue<'static>>,
+}
 impl Entity {
     pub fn get_name(&self) -> &str {
         match self {
-            Entity::Variable { name, .. } => name,
-            Entity::Function { name, .. } => name,
+            Entity::Variable(VariableEntity { name, .. }) => name,
+            Entity::Function(FunctionEntity { name, .. }) => name,
         }
     }
     pub fn get_type(&self) -> Arc<Type> {
         match self {
-            Entity::Variable { _type, .. } => _type.clone(),
-            Entity::Function { _type, .. } => _type.clone(),
+            Entity::Variable(VariableEntity { _type, .. }) => _type.clone(),
+            Entity::Function(FunctionEntity { _type, .. }) => _type.clone(),
         }
     }
     pub fn get_location(&self) -> &Range<usize> {
         match self {
-            Entity::Variable { location, .. } => location,
-            Entity::Function { location, .. } => location,
+            Entity::Variable(VariableEntity { location, .. }) => location,
+            Entity::Function(FunctionEntity { location, .. }) => location,
+        }
+    }
+    pub fn is_variable(&self) -> bool {
+        match self {
+            Entity::Variable(_) => true,
+            Entity::Function(_) => false,
+        }
+    }
+    pub fn is_function(&self) -> bool {
+        match self {
+            Entity::Variable(_) => false,
+            Entity::Function(_) => true,
+        }
+    }
+    pub fn as_variable(&self) -> &VariableEntity {
+        match self {
+            Entity::Variable(ref v) => v,
+            _ => panic!("not a variable"),
+        }
+    }
+    pub fn as_function(&self) -> &FunctionEntity {
+        match self {
+            Entity::Function(ref f) => f,
+            _ => panic!("not a function"),
+        }
+    }
+    pub fn as_variable_mut(&mut self) -> &mut VariableEntity {
+        match self {
+            Entity::Variable(ref mut v) => v,
+            _ => panic!("not a variable"),
+        }
+    }
+    pub fn as_function_mut(&mut self) -> &mut FunctionEntity {
+        match self {
+            Entity::Function(ref mut f) => f,
+            _ => panic!("not a function"),
         }
     }
 }
@@ -111,11 +150,12 @@ impl Scope {
         _type: Arc<Type>,
         _extern: bool,
     ) -> Result<Arc<RefCell<Entity>>, ParserError> {
-        if self.stack.len() != 1 {
+        if self.stack.len() > 2 {
+            // 1 for root, 1 for func params
             return Err(ParserError::InvalidFunctionDefination(name.to_string()));
         }
         self.stack
-            .last()
+            .first()
             .unwrap()
             .borrow_mut()
             .define_function(name, location, _type, _extern)
@@ -161,13 +201,13 @@ impl SubScope {
                 v.borrow().get_location().clone(),
             ));
         }
-        let e = Arc::new(RefCell::new(Entity::Function {
+        let e = Arc::new(RefCell::new(Entity::Function(FunctionEntity {
             name: name.to_owned(),
             location,
             _type,
             _extern,
             llvm: None,
-        }));
+        })));
         self.entities.insert(name.to_owned(), e.clone());
         Ok(e)
     }
@@ -186,13 +226,13 @@ impl SubScope {
         }
         self.entities.insert(
             name.to_string(),
-            Arc::new(RefCell::new(Entity::Variable {
+            Arc::new(RefCell::new(Entity::Variable(VariableEntity {
                 name: name.to_string(),
                 location,
                 _type,
                 init_expr: expr,
                 llvm: None,
-            })),
+            }))),
         );
         Ok(self.entities.get(name).unwrap().clone())
     }

@@ -182,7 +182,7 @@ fragment ESCAPE: '\\' ['"?abfnrtv\\];
 // Parser compile unit
 compUnit: topDef+ EOF;
 name: IDENTIFIER;
-topDef: funcDef | funcDecl | varDef | constDef | structDef;
+topDef: funcDef | funcDecl | varDef | structDef;
 // TODO: support unionDef TODO: support typeDef;
 varDef locals [
 	Option<Box<dyn ExprNode>> init_expr
@@ -219,9 +219,15 @@ varDef locals [
 		);
 		report_or_unwrap!(result, recog);
 	})* ';';
+// TODO: support const
 constDef: CONST t = typeName name '=' value = expr ';';
-funcDef:
-	storage ret = typeName name '(' params ')'{
+funcDef returns [
+	Option<Arc<RefCell<Entity>>> e,
+	Option<Arc<RefCell<SubScope>>> scope
+]:
+	storage ret = typeName name {
+		$scope = Some(recog.scope.push());
+	} '(' params ')'{
 		let ret_type = $ret.v;
 		let (param, variadic) = $params.v.borrow().clone();
 		let func_type = Type::function_type(
@@ -238,8 +244,10 @@ funcDef:
 			false
 		);
 		let index = $name.ctx.start().token_index.load(Ordering::Relaxed);
-		report_or_unwrap!(result, recog, index);
-	} body = block;
+		$e = Some(report_or_unwrap!(result, recog, index));
+	} body = block {
+		recog.scope.pop();
+	};
 funcDecl:
 	EXTERN ret = typeName name '(' paramsDecl ')' ';' {
 		let ret_type = $ret.v;
@@ -270,15 +278,20 @@ params
 		',' param {
 	(&$v).borrow_mut().0.push($param.v.1.clone());
 }
-	)* (
-		',' '...' {
-	(&$v).borrow_mut().1 = true;
-}
-	)?;
+	)*;
 param
 	returns[(String, Arc<Type>) v]:
 	t = typeName name {
-	$v = ($name.text.to_string(), $t.v.to_owned());
+	let t = $t.v;
+	let name = $name.text;
+	let result = recog.scope.define_variable(
+		&name, 
+		location_for_ctx!($name.ctx),
+		t.clone(),
+		None
+	);
+	report_or_unwrap!(result, recog);
+	$v = (name, t.clone());
 };
 paramsDecl
 	returns[RefCell<(Vec<Arc<Type>>, bool)> v]:
@@ -301,7 +314,8 @@ paramDecl
 };
 block
 	returns[Option<Arc<RefCell<SubScope>>> scope]:
-	'{' {$scope = Some(recog.scope.push());} defvarList stmts '}' {recog.scope.pop();};
+	'{' {$scope = Some(recog.scope.push());} 
+	vars = defvarList body = stmts '}' {recog.scope.pop();};
 defvarList: vars = varDef*;
 structDef:
 	STRUCT name memberList ';' {
@@ -358,13 +372,14 @@ typeName
 		| '*' {
 			$v = Arc::new(Type::Pointer{element_type: (&$v).clone()});
 		}
-		| '(' paramtypes ')' {
-			$v = Arc::new(Type::Function{
-				return_type: (&$v).clone(),
-				parameters: $paramtypes.v.0.clone(),
-				variadic: $paramtypes.v.1,
-			});
-		}
+		// support function pointer
+		// | '(' paramtypes ')' {
+		// 	$v = Arc::new(Type::Function{
+		// 		return_type: (&$v).clone(),
+		// 		parameters: $paramtypes.v.0.clone(),
+		// 		variadic: $paramtypes.v.1,
+		// 	});
+		// }
 	)*;
 paramtypes
 	returns[(Vec<Arc<Type>>, bool) v]
@@ -373,65 +388,26 @@ paramtypes
 	$v = (vec![], false);
 }
 	| (
-		paramtype {
-	let tt = $paramtype.v.clone();
+		typeName {
+	let tt = $typeName.v.clone();
 	let mut ttt = (&$types).clone();
 	ttt.push(tt);
 	$types = ttt;
 }
-	)+ (
+	) (
+		','typeName {
+		let tt = $typeName.v.clone();
+		let mut ttt = (&$types).clone();
+		ttt.push(tt);
+		$types = ttt;
+	}
+	)* (
 		',' '...' {
 	$variadic = true;
 	}
 	)? {
 	$v = ((&$types).clone(), $variadic);
 };
-paramtype
-	returns[Arc<Type>  v]:
-	CHAR {
-		$v = Arc::new(Type::Integer{size: 8, signed: true});
-	}
-	| SHORT {
-		$v = Arc::new(Type::Integer{size: 16, signed: true});
-	}
-	| INT {
-		$v = Arc::new(Type::Integer{size: 32, signed: true});
-	}
-	| LONG {
-		$v = Arc::new(Type::Integer{size: 64, signed: true});
-	}
-	| UNSIGNED CHAR {
-		$v = Arc::new(Type::Integer{size: 8, signed: false});
-	}
-	| UNSIGNED SHORT {
-		$v = Arc::new(Type::Integer{size: 16, signed: false});
-	}
-	| UNSIGNED INT {
-		$v = Arc::new(Type::Integer{size: 32, signed: false});
-	}
-	| UNSIGNED LONG {
-		$v = Arc::new(Type::Integer{size: 64, signed: false});
-	}
-	| STRUCT n = IDENTIFIER {
-		let t = match recog.getType($n.text) {
-			Some(t) => t,
-			None => {
-				let name = (&$n.text);
-				recog.notify_error_listeners(
-					format!("Type struct {} not found", name),
-					// last token
-					Some(recog.base.input.index() - 1),
-					None
-				);
-				return Err(
-					ANTLRError::FallThrough(Rc::new(
-						ParserError::TypeNotFound(name.to_string())
-					))
-				);
-			},
-		};
-		$v = t;
-	};
 typeBase
 	returns[Arc<Type> v]:
 	VOID {
@@ -484,19 +460,20 @@ typeBase
 // | {recog.isType(recog.get_current_token())}? IDENTIFIER;
 stmts: stmt*;
 stmt:
-	';'
-	| labeledStmt
-	| expr ';'
-	| block
-	| ifStmt
-	| whileStmt
-	| dowhileStmt
-	| forStmt
-	| switchStmt
-	| breakStmt
-	| continueStmt
+	';' #empty
+	// | labeledStmt
+	| expr ';' #exprStmt
+	| block    #blockStmt
+	| ifStmt   #if
+	| whileStmt #while
+	| dowhileStmt #dowhile
+	| forStmt #for
+	// TODO
+	// | switchStmt #switch 
+	| breakStmt #break
+	| continueStmt #contine
 	// | gotoStmt // TODO: implement goto
-	| returnStmt;
+	| returnStmt #return;
 labeledStmt: IDENTIFIER ':' stmt;
 ifStmt:
 	IF '(' cond = expr ')' thenStmt = stmt (ELSE elseStmt = stmt)?;
