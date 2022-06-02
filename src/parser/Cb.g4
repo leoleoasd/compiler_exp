@@ -270,13 +270,13 @@ funcDecl:
 };
 storage: STATIC?;
 params
-	returns[RefCell<(Vec<Arc<Type>>, bool)> v]:
+	returns[RefCell<(Vec<(String, Arc<Type>)>, bool)> v]:
 	VOID
 	| param {
-	(&$v).borrow_mut().0.push($param.v.1.clone());
+	(&$v).borrow_mut().0.push($param.v.clone());
 } (
 		',' param {
-	(&$v).borrow_mut().0.push($param.v.1.clone());
+	(&$v).borrow_mut().0.push($param.v.clone());
 }
 	)*;
 param
@@ -294,13 +294,13 @@ param
 	$v = (name, t.clone());
 };
 paramsDecl
-	returns[RefCell<(Vec<Arc<Type>>, bool)> v]:
+	returns[RefCell<(Vec<(String, Arc<Type>)>, bool)> v]:
 	VOID
 	| paramDecl {
-	(&$v).borrow_mut().0.push($paramDecl.v.clone());
+	(&$v).borrow_mut().0.push(("_unnamed_".to_string(), $paramDecl.v.clone()));
 } (
 		',' paramDecl {
-	(&$v).borrow_mut().0.push($paramDecl.v.clone());
+	(&$v).borrow_mut().0.push(("_unnamed_".to_string(), $paramDecl.v.clone()));
 }
 	)* (
 		',' '...' {

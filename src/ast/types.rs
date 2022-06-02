@@ -1,9 +1,9 @@
-use std::{cmp::max, ops::Range, sync::Arc};
+use std::{cmp::{max, Ordering}, ops::Range, sync::Arc};
 
 use inkwell::{
     context::Context,
     types::{BasicType, BasicTypeEnum},
-    AddressSpace,
+    AddressSpace, values::InstructionOpcode,
 };
 
 use crate::parser::errors::ParserError;
@@ -21,7 +21,7 @@ pub enum Type {
     },
     Function {
         return_type: Arc<Type>,
-        parameters: Vec<Arc<Type>>,
+        parameters: Vec<(String, Arc<Type>)>,
         variadic: bool,
     },
     Pointer {
@@ -62,7 +62,7 @@ impl Type {
                     if i > 0 {
                         name.push_str(", ");
                     }
-                    name.push_str(&parameter.name());
+                    name.push_str(format!("{}: {}", parameter.0, parameter.1.name()).as_str());
                 }
                 name.push(')');
                 name
@@ -82,7 +82,7 @@ impl Type {
             element_type: s,
         })
     }
-    pub fn function_type(s: Arc<Self>, parameters: Vec<Arc<Type>>, variadic: bool) -> Arc<Type> {
+    pub fn function_type(s: Arc<Self>, parameters: Vec<(String, Arc<Type>)>, variadic: bool) -> Arc<Type> {
         Arc::new(Type::Function {
             return_type: s,
             parameters,
@@ -258,7 +258,7 @@ impl Type {
                     return Err(ParserError::IllegalType(self.name(), None));
                 }
                 for parameter in parameters {
-                    if parameter.is_legal().is_err() {
+                    if parameter.1.is_legal().is_err() {
                         return Err(ParserError::IllegalType(self.name(), None));
                     }
                 }
@@ -282,6 +282,39 @@ impl Type {
                 }
                 Ok(())
             }
+        }
+    }
+    
+    pub fn cast_op(&self, to_type: &Type) -> InstructionOpcode {
+        match (self, to_type) {
+            (
+                Type::Integer {
+                    size: size1,
+                    signed: signed1,
+                },
+                Type::Integer {
+                    signed: signed2,
+                    size: size2,
+                },
+            ) => match size1.cmp(size2) {
+                Ordering::Equal => InstructionOpcode::BitCast,
+                Ordering::Greater => InstructionOpcode::Trunc,
+                Ordering::Less => {
+                    if *signed1 {
+                        InstructionOpcode::SExt
+                    } else {
+                        InstructionOpcode::ZExt
+                    }
+                }
+            },
+            (Type::Pointer { .. }, Type::Pointer { .. }) => InstructionOpcode::BitCast,
+            (Type::Pointer { .. }, Type::Integer { .. }) => InstructionOpcode::PtrToInt,
+            (Type::Integer { .. }, Type::Pointer { .. }) => InstructionOpcode::IntToPtr,
+            _ => panic!(
+                "cast from {} to {} not supported",
+                self.name(),
+                to_type.name()
+            ),
         }
     }
 }

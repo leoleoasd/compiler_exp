@@ -3,7 +3,7 @@ use crate::parser::errors::ParserError;
 use super::scope::VariableEntity;
 use std::any::Any;
 use super::{node::Node, scope::Entity, types::Type};
-use inkwell::AddressSpace;
+use inkwell::{AddressSpace, IntPredicate};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
@@ -35,6 +35,23 @@ pub trait ExprNode: Node {
     }
     fn addr(&self, context: &'static Context, builder: &Builder<'static>) -> PointerValue<'static> {
         todo!()
+    }
+    fn cast_value(
+        &self,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
+        to_type: &Type,
+    ) -> BasicValueEnum<'static> {
+        if &*self.get_type() == to_type {
+            return self.value(context, module, builder);
+        }
+        builder.build_cast(
+            self.get_type().cast_op(to_type),
+            self.value(context, module, builder),
+            to_type.to_llvm_type(context),
+            "cast",
+        )
     }
 }
 dyn_clone::clone_trait_object!(ExprNode);
@@ -186,17 +203,12 @@ impl ExprNode for StringLiteralNode {
             module: &'static Module,
             builder: &Builder<'static>,
         ) -> BasicValueEnum<'static> {
-        if builder.get_insert_block().is_some() {
-            builder.build_global_string_ptr(&self.value, "").as_basic_value_enum()
-        } else {
-            let vector = context.const_string(self.value.as_bytes(), true);
-            let ptr = module.add_global(vector.get_type(), Some(AddressSpace::Local), "");
-            ptr.set_initializer(&vector);
-            let ptr = ptr.as_pointer_value();
-            let to_ptr_type = context.i8_type().ptr_type(AddressSpace::Generic);
-            println!("TYPE {:?}", ptr.const_cast(to_ptr_type).get_type());
-            ptr.const_cast(to_ptr_type).as_basic_value_enum()
-        }
+        let vector = context.const_string(self.value.as_bytes(), true);
+        let ptr = module.add_global(vector.get_type(), Some(AddressSpace::Local), "");
+        ptr.set_initializer(&vector);
+        let ptr = ptr.as_pointer_value();
+        let to_ptr_type = context.i8_type().ptr_type(AddressSpace::Generic);
+        ptr.const_cast(to_ptr_type).as_basic_value_enum()
     }
 }
 impl StringLiteralNode {
@@ -511,10 +523,10 @@ impl PostfixExprNode {
                 ));
             }
             for (index, (exp, act)) in parameters.iter().zip(args.iter()).enumerate() {
-                if *exp != act.get_type() {
+                if exp.1 != act.get_type() {
                     return Err(ParserError::ArgumentTypeMismatch(
                         index,
-                        exp.name(),
+                        exp.1.name(),
                         act.get_type().name(),
                     ));
                 }
@@ -812,7 +824,8 @@ impl ExprNode for BinaryExprNode {
     fn get_type(&self) -> Arc<Type> {
         // return BOOLEAN_TYPE for logical operators
         match self.op {
-            BinaryOp::LogicalAnd | BinaryOp::LogicalOr => BOOLEAN_TYPE.clone(),
+            BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Ge |
+            BinaryOp::Gt | BinaryOp::Le | BinaryOp::Lt => BOOLEAN_TYPE.clone(),
             BinaryOp::Comma => self.rhs.get_type(),
             _ => Type::binary_cast(self.lhs.get_type(), self.rhs.get_type()).unwrap(),
         }
@@ -826,6 +839,32 @@ impl ExprNode for BinaryExprNode {
     }
     fn get_const_value(&self) -> Option<ConstValue> {
         None
+    }
+    fn value(
+            &self,
+                context: &'static Context,
+                module: &'static Module,
+                builder: &Builder<'static>,
+        ) -> BasicValueEnum<'static> {
+        match &self.op {
+            BinaryOp::Add => {
+                let result_type = self.get_type();
+                if result_type.is_integer() {
+                    let lhs = self.lhs.cast_value(context, module, builder, result_type.as_ref()).into_int_value();
+                    let rhs = self.rhs.cast_value(context, module, builder, result_type.as_ref()).into_int_value();
+                    builder.build_int_add(lhs, rhs, "").as_basic_value_enum()
+                } else {
+                    todo!()
+                }
+            }
+            BinaryOp::Eq => {
+                let result_type = Type::binary_cast(self.lhs.get_type(), self.rhs.get_type()).unwrap();
+                let lhs = self.lhs.cast_value(context, module, builder, result_type.as_ref()).into_int_value();
+                let rhs = self.rhs.cast_value(context, module, builder, result_type.as_ref()).into_int_value();
+                builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "").as_basic_value_enum()
+            }
+            _ => todo!()
+        }
     }
 }
 impl BinaryExprNode {

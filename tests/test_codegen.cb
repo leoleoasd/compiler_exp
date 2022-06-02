@@ -4,7 +4,13 @@ char c = 3;
 extern void printf(char*, ...);
 char * str = "Hello world from Cb lang!\n";
 
-int main(char c){
+int main(int argc, char* argv){
     printf(str);
     printf("This is %d %d\n", 2, a);
+    printf("Argc: %d\n", argc);
+    if(argc == 1) {
+        printf("Then\n");
+    } else {
+        printf("Else\n");
+    }
 }

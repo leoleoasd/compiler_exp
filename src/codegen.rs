@@ -7,10 +7,8 @@ use std::sync::Arc;
 use crate::ast::scope::{Entity, FunctionEntity, Scope, VariableEntity};
 use crate::ast::types::Type;
 
-use crate::parser::cbparser::{
-    CbParser, CbParserContextType, CompUnitContext, CompUnitContextAttrs, FuncDefContext,
-    LocalTokenFactory, TopDefContextAttrs, BlockContext, BlockContextAttrs, StmtContextAll, ExprStmtContext, ExprStmtContextAttrs,
-};use crate::parser::cbparser::StmtsContextAttrs;
+use crate::parser::cbparser::*;
+use crate::parser::cbparser::StmtsContextAttrs;
 
 use antlr_rust::token_stream::TokenStream;
 
@@ -64,9 +62,7 @@ where
                             .add_global(llvm_type, Some(AddressSpace::Local), name.as_str());
                     if let Some(init_expr) = init_expr {
                         // todo check for constexpr
-                        let expr = init_expr.value(self.context, self.module, &self.builder);
-                        println!("{:?}", expr);
-                        let expr = self.cast_value(expr, init_expr.get_type(), _type.clone());
+                        let expr = init_expr.cast_value(self.context, self.module, &self.builder, &_type);
                         println!("{:?}", expr);
                         llvm_ptr.set_initializer(&expr);
                     } else {
@@ -93,7 +89,7 @@ where
                     };
                     let param_type: Vec<BasicMetadataTypeEnum> = args
                         .iter()
-                        .map(|t| t.to_llvm_type(self.context).into())
+                        .map(|t| t.1.to_llvm_type(self.context).into())
                         .collect();
                     let fn_type = match &**return_type {
                         Type::Void => self.context.void_type().fn_type(&param_type, *variadic),
@@ -145,14 +141,25 @@ where
         let func_type = func_entity._type.clone();
         self.builder.position_at_end(entry);
         self.current_function = Some((llvm_func, func_entity._type.clone()));
-        for (name, arg) in &mut func_arg_scope.borrow_mut().entities {
-            let mut arg = arg.borrow_mut();
-            let arg_ent = arg.as_variable_mut();
-            let alloca = self.builder.build_alloca(
-                arg_ent._type.to_llvm_type(self.context), &("_func_arg_".to_string() + name));
-            arg_ent.llvm = Some(alloca);
+
+        if let Type::Function { return_type, parameters, variadic } = &*func_type {
+            for (index, arg) in parameters.iter().enumerate() {
+                let e = func_arg_scope.borrow_mut();
+                let arg_ent = e.entities.get(&arg.0).unwrap();
+                let mut arg_ent = arg_ent.borrow_mut();
+                let arg_ent = arg_ent.as_variable_mut();
+                let alloca = self.builder.build_alloca(
+                    arg.1.to_llvm_type(self.context), &("_func_arg_".to_string() + &arg.0));
+                arg_ent.llvm = Some(alloca);
+                let arg_value = self.current_function.as_ref().unwrap().0.get_nth_param(index as u32).unwrap();
+                self.builder.build_store(alloca, arg_value);
+            }
+        } else {
+            unreachable!()
         }
-        self.gen_block(func.body.clone().unwrap());
+
+
+        self.gen_block(func.body.as_ref().unwrap());
 
         let mut block_iter = llvm_func.get_first_basic_block();
         while block_iter.is_some() {
@@ -175,7 +182,7 @@ where
         self.current_function = None;
     }
 
-    fn gen_block(&mut self, block: Rc<BlockContext<'static>>) {
+    fn gen_block(&mut self, block: &BlockContext<'static>) {
         let scope = block.scope.clone().unwrap();
         let mut scope = scope.borrow_mut();
         for (name, arg) in &mut scope.entities {
@@ -185,35 +192,64 @@ where
                 arg_ent._type.to_llvm_type(self.context), name);
             arg_ent.llvm = Some(alloca);
             if let Some(init_expr) = &arg_ent.init_expr {
-                let expr = init_expr.value(self.context, self.module, &self.builder);
-                let expr = self.cast_value(expr, init_expr.get_type(), arg_ent._type.clone());
+                let expr = init_expr.cast_value(self.context, self.module, &self.builder, &arg_ent._type);
                 self.builder.build_store(alloca, expr);
             } else {
                 self.builder.build_store(alloca, arg_ent._type.to_llvm_type(self.context).const_zero());
             }
         }
         for stmt in block.body.clone().unwrap().stmt_all() {
-            self.gen_stmt(stmt.clone());
+            self.gen_stmt(stmt.as_ref());
         }
     }
     
-    fn gen_stmt(&mut self, stmt: Rc<StmtContextAll<'static>>) {
+    fn gen_stmt(&mut self, stmt: &StmtContextAll<'static>) {
         match &*stmt {
             StmtContextAll::DowhileContext(_) => todo!(),
             StmtContextAll::ExprStmtContext(s) => self.gen_expr_stmt(s),
-            StmtContextAll::BlockStmtContext(_) => todo!(),
+            StmtContextAll::BlockStmtContext(b) => self.gen_block(b.block().as_ref().unwrap()),
             StmtContextAll::BreakContext(_) => todo!(),
             StmtContextAll::ForContext(_) => todo!(),
             StmtContextAll::ContineContext(_) => todo!(),
             StmtContextAll::WhileContext(_) => todo!(),
-            StmtContextAll::IfContext(_) => todo!(),
+            StmtContextAll::IfContext(s) => self.gen_if_stmt(s.ifStmt().as_ref().unwrap()),
             StmtContextAll::ReturnContext(_) => todo!(),
             StmtContextAll::EmptyContext(_) => todo!(),
             StmtContextAll::Error(_) => unreachable!(),
         }
     }
 
-    fn gen_expr_stmt(&mut self, stmt: &ExprStmtContext) {
+    fn gen_if_stmt(&mut self, stmt: &IfStmtContext<'static>) {
+        let cond = stmt.cond
+            .clone()
+            .unwrap();
+        let cond = cond.e.as_ref().unwrap();
+        let cond = cond.value(self.context, self.module, &self.builder);
+        let func = self.current_function.as_ref().unwrap().0;
+        let then_block = self.context.append_basic_block(func, "then_block");
+        let else_block = self.context.append_basic_block(func, "else_block");
+        let merge_block = self.context.append_basic_block(func, "merge_block");
+
+        self.builder.build_conditional_branch(cond.into_int_value(), then_block, else_block);
+        self.builder.position_at_end(then_block);
+        self.gen_stmt(stmt.thenStmt.clone().unwrap().as_ref());
+        
+        if self.no_terminator() {
+            self.builder.build_unconditional_branch(merge_block);
+        }
+
+        // build else_block
+        self.builder.position_at_end(else_block);
+        self.gen_stmt(stmt.elseStmt.clone().unwrap().as_ref());
+
+        if self.no_terminator() {
+            self.builder.build_unconditional_branch(merge_block);
+        }
+
+        self.builder.position_at_end(merge_block);
+    }
+
+    fn gen_expr_stmt(&mut self, stmt: &ExprStmtContext<'static>) {
         // this should do the work
         let expr = stmt.expr();
         let expr = expr.clone().unwrap();
@@ -221,55 +257,6 @@ where
         expr.unwrap().value(self.context, self.module, &self.builder);
     }
 
-    fn cast_value(
-        &self,
-        value: BasicValueEnum<'static>,
-        from_type: Arc<Type>,
-        to_type: Arc<Type>,
-    ) -> BasicValueEnum<'static> {
-        if from_type == to_type {
-            return value;
-        }
-        self.builder.build_cast(
-            self.cast_op(&*from_type, &*to_type),
-            value,
-            to_type.to_llvm_type(self.context),
-            "cast",
-        )
-    }
-
-    fn cast_op(&self, from_type: &Type, to_type: &Type) -> InstructionOpcode {
-        match (&*from_type, &*to_type) {
-            (
-                Type::Integer {
-                    size: size1,
-                    signed: signed1,
-                },
-                Type::Integer {
-                    signed: signed2,
-                    size: size2,
-                },
-            ) => match size1.cmp(size2) {
-                Ordering::Equal => InstructionOpcode::BitCast,
-                Ordering::Greater => InstructionOpcode::Trunc,
-                Ordering::Less => {
-                    if *signed1 {
-                        InstructionOpcode::SExt
-                    } else {
-                        InstructionOpcode::ZExt
-                    }
-                }
-            },
-            (Type::Pointer { .. }, Type::Pointer { .. }) => InstructionOpcode::BitCast,
-            (Type::Pointer { .. }, Type::Integer { .. }) => InstructionOpcode::PtrToInt,
-            (Type::Integer { .. }, Type::Pointer { .. }) => InstructionOpcode::IntToPtr,
-            _ => panic!(
-                "cast from {} to {} not supported",
-                from_type.name(),
-                to_type.name()
-            ),
-        }
-    }
     pub fn new(
         context: &'static Context,
         source_path: String,
@@ -294,5 +281,11 @@ where
             break_labels: VecDeque::new(),
             continue_labels: VecDeque::new(),
         }
+    }
+
+    // check if a basic block has no terminator
+    fn no_terminator(&self) -> bool {
+        let block = self.builder.get_insert_block();
+        block.unwrap().get_terminator().is_none()
     }
 }
