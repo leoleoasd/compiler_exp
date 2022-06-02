@@ -17,7 +17,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::types::{BasicMetadataTypeEnum, BasicTypeEnum};
-use inkwell::values::{BasicValue, FunctionValue};
+use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue};
 use inkwell::AddressSpace;
 
 pub struct CodeGen<I>
@@ -62,13 +62,21 @@ where
                             name.as_str(),
                         );
                         if let Some(init_expr) = init_expr {
-                            // todo check for constexpr
                             let expr = init_expr.cast_value(
                                 self.context,
                                 self.module,
                                 &self.builder,
                                 _type.clone(),
                             );
+                            // todo: better error handling
+                            match expr {
+                                BasicValueEnum::ArrayValue(v) => assert!(v.is_const()),
+                                BasicValueEnum::IntValue(v) => assert!(v.is_const()),
+                                BasicValueEnum::PointerValue(v) => assert!(v.is_const()),
+                                BasicValueEnum::VectorValue(v) => assert!(v.is_const()),
+                                BasicValueEnum::FloatValue(v) => unreachable!(),
+                                BasicValueEnum::StructValue(v) => unreachable!(),
+                            }
                             println!("{:?}", expr);
                             llvm_ptr.set_initializer(&expr);
                         } else {

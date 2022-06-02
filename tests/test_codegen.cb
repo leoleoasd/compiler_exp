@@ -1,7 +1,7 @@
 int a = 0x1234;
 int b = 'a';
 char c = 3 + 235;
-extern void printf(char*, ...);
+extern int printf(char*, ...);
 char * str = "___Hello world from Cb lang!\n";
 struct test{
     int foo;
@@ -39,6 +39,11 @@ int main(int argc, char** argv){
     }
     printf("A + B = %d\n", add(2, array[0]));
     printf("argv: %s\n", argv[0]);
+    1 && printf("not_reached");
+    0 && printf("good\n");
+    0 || printf("not_reached");
+    1 || printf("good\n");
+    (0,1) || printf("good\n");
     if (!1) {
         printf("not reached");
     } else {

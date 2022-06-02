@@ -1118,6 +1118,159 @@ impl ExprNode for BinaryExprNode {
                     }
                 }
             }
+            BinaryOp::Sub => {
+                let result_type = self.get_type();
+                if result_type.is_integer() {
+                    let lhs = self
+                        .lhs
+                        .cast_value(context, module, builder, result_type.clone())
+                        .into_int_value();
+                    let rhs = self
+                        .rhs
+                        .cast_value(context, module, builder, result_type)
+                        .into_int_value();
+                    builder.build_int_sub(lhs, rhs, "").as_basic_value_enum()
+                } else {
+                    let lhs = self.lhs.value(context, module, builder);
+                    let rhs = self.rhs.value(context, module, builder);
+                    assert!(lhs.is_pointer_value());
+                    assert!(rhs.is_int_value());
+                    unsafe {
+                        builder.build_gep(
+                            lhs.into_pointer_value(),
+                            &[builder.build_int_neg(rhs.into_int_value(), "")],
+                            "",
+                        )
+                    }
+                    .as_basic_value_enum()
+                }
+            }
+            BinaryOp::Mul => {
+                let result_type = self.get_type();
+                let lhs = self
+                    .lhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let rhs = self
+                    .rhs
+                    .cast_value(context, module, builder, result_type)
+                    .into_int_value();
+                builder.build_int_mul(lhs, rhs, "").as_basic_value_enum()
+            }
+            BinaryOp::Div => {
+                let result_type = self.get_type();
+                let lhs = self
+                    .lhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let rhs = self
+                    .rhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let signed = match &*result_type {
+                    Type::Integer { signed, .. } => signed,
+                    _ => unreachable!(),
+                };
+                if *signed {
+                    builder
+                        .build_int_signed_div(lhs, rhs, "")
+                        .as_basic_value_enum()
+                } else {
+                    builder
+                        .build_int_unsigned_div(lhs, rhs, "")
+                        .as_basic_value_enum()
+                }
+            }
+            BinaryOp::Mod => {
+                let result_type = self.get_type();
+                let lhs = self
+                    .lhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let rhs = self
+                    .rhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let signed = match &*result_type {
+                    Type::Integer { signed, .. } => signed,
+                    _ => unreachable!(),
+                };
+                if *signed {
+                    builder
+                        .build_int_signed_rem(lhs, rhs, "")
+                        .as_basic_value_enum()
+                } else {
+                    builder
+                        .build_int_unsigned_rem(lhs, rhs, "")
+                        .as_basic_value_enum()
+                }
+            }
+            BinaryOp::Shl => {
+                let result_type = self.get_type();
+                let lhs = self
+                    .lhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let rhs = self
+                    .rhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                builder.build_left_shift(lhs, rhs, "").as_basic_value_enum()
+            }
+            BinaryOp::Shr => {
+                let result_type = self.get_type();
+                let lhs = self
+                    .lhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let rhs = self
+                    .rhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let signed = match &*result_type {
+                    Type::Integer { signed, .. } => signed,
+                    _ => unreachable!(),
+                };
+                builder
+                    .build_right_shift(lhs, rhs, *signed, "")
+                    .as_basic_value_enum()
+            }
+            BinaryOp::And => {
+                let result_type = self.get_type();
+                let lhs = self
+                    .lhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let rhs = self
+                    .rhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                builder.build_and(lhs, rhs, "").as_basic_value_enum()
+            }
+            BinaryOp::Or => {
+                let result_type = self.get_type();
+                let lhs = self
+                    .lhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let rhs = self
+                    .rhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                builder.build_or(lhs, rhs, "").as_basic_value_enum()
+            }
+            BinaryOp::Xor => {
+                let result_type = self.get_type();
+                let lhs = self
+                    .lhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let rhs = self
+                    .rhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                builder.build_xor(lhs, rhs, "").as_basic_value_enum()
+            }
             BinaryOp::Eq
             | BinaryOp::Ne
             | BinaryOp::Ge
@@ -1147,7 +1300,73 @@ impl ExprNode for BinaryExprNode {
                     .build_int_compare(self.op.to_llvm_op(signed), lhs, rhs, "")
                     .as_basic_value_enum()
             }
-            _ => todo!(),
+            BinaryOp::LogicalAnd => {
+                let current_block = builder.get_insert_block().unwrap();
+                let func = current_block.get_parent().unwrap();
+                let rhs_block = context.append_basic_block(func, "rhs");
+                let merge_block = context.append_basic_block(func, "merge");
+
+                let lhs = self.lhs.value(context, module, builder).into_int_value();
+                let lhs = builder.build_int_compare(
+                    IntPredicate::NE,
+                    lhs,
+                    lhs.get_type().const_zero(),
+                    "",
+                );
+                let lhs = builder.build_int_truncate(lhs, context.custom_width_int_type(1), "");
+                builder.build_conditional_branch(lhs, merge_block, rhs_block);
+                builder.position_at_end(rhs_block);
+                let rhs = self.rhs.value(context, module, builder).into_int_value();
+                let rhs = builder.build_int_compare(
+                    IntPredicate::NE,
+                    rhs,
+                    rhs.get_type().const_zero(),
+                    "",
+                );
+                let rhs = builder.build_int_truncate(rhs, context.custom_width_int_type(1), "");
+                builder.build_unconditional_branch(merge_block);
+                builder.position_at_end(merge_block);
+                let phi = builder.build_phi(context.custom_width_int_type(1), "");
+                phi.add_incoming(&[(&context.custom_width_int_type(1).const_int(1, false), current_block),
+                    (&rhs, rhs_block)]);
+                phi.as_basic_value()
+            }
+            BinaryOp::LogicalOr => {
+                let current_block = builder.get_insert_block().unwrap();
+                let func = current_block.get_parent().unwrap();
+                let rhs_block = context.append_basic_block(func, "rhs");
+                let merge_block = context.append_basic_block(func, "merge");
+
+                let lhs = self.lhs.value(context, module, builder).into_int_value();
+                let lhs = builder.build_int_compare(
+                    IntPredicate::EQ,
+                    lhs,
+                    lhs.get_type().const_zero(),
+                    "",
+                );
+                let lhs = builder.build_int_truncate(lhs, context.custom_width_int_type(1), "");
+                builder.build_conditional_branch(lhs, merge_block, rhs_block);
+                builder.position_at_end(rhs_block);
+                let rhs = self.rhs.value(context, module, builder).into_int_value();
+                let rhs = builder.build_int_compare(
+                    IntPredicate::EQ,
+                    rhs,
+                    rhs.get_type().const_zero(),
+                    "",
+                );
+                let rhs = builder.build_int_truncate(rhs, context.custom_width_int_type(1), "");
+                builder.build_unconditional_branch(merge_block);
+                builder.position_at_end(merge_block);
+                let phi = builder.build_phi(context.custom_width_int_type(1), "");
+                phi.add_incoming(&[(&context.custom_width_int_type(1).const_int(0, false), current_block),
+                    (&rhs, rhs_block)]);
+                phi.as_basic_value()
+            },
+            BinaryOp::Comma => {
+                // calculate lhs, drop
+                self.lhs.value(context, module, builder);
+                self.rhs.value(context, module, builder)
+            }
         }
     }
 }
@@ -1173,8 +1392,10 @@ impl BinaryExprNode {
         rhs: Box<dyn ExprNode>,
         location: Range<usize>,
     ) -> Result<Self, ParserError> {
-        // allow subtracting integer and integer with pointers
-        if Type::binary_cast(lhs.get_type(), rhs.get_type()).is_some() {
+        // allow sub int from pointers
+        if (lhs.get_type().is_integer() || lhs.get_type().is_pointer())
+            && rhs.get_type().is_integer()
+        {
             return Ok(BinaryExprNode {
                 lhs,
                 rhs,
@@ -1477,8 +1698,7 @@ impl ExprNode for CondExprNode {
     }
 
     fn is_addressable(&self) -> bool {
-        // todo
-        false
+        self.then_expr.is_addressable() && self.else_expr.is_addressable()
     }
 }
 impl CondExprNode {
