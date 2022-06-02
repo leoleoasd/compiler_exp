@@ -31,6 +31,7 @@ grammar Cb;
 use std::collections::HashMap;
 use crate::ast::scope::Scope;
 use crate::ast::scope::SubScope;
+use crate::ast::scope::Entity;
 use crate::ast::types::Type;
 use crate::ast::node::Node;
 use crate::ast::expr::*;
@@ -170,17 +171,34 @@ compUnit: topDef+ EOF;
 name: IDENTIFIER;
 topDef: funcDef | funcDecl | varDef | constDef | structDef;
 // TODO: support unionDef TODO: support typeDef;
-varDef:
-	s = storage t = typeName name {
+varDef locals [
+	Option<Box<dyn ExprNode>> init_expr
+]:
+	s = storage t = typeName name ('=' init = assignmentExpr {
+		$init_expr = $init.e;
+	}) ? {
 		let text = &$name.text; 
 		let t = $t.v.clone();
 		let result = recog.scope.define_variable(
 			text, 
 			location_for_ctx!($name.ctx),
-			t
+			t,
+			(&$init_expr).clone()
 		);
 		report_or_unwrap!(result, recog);
-	} ('=' init = expr)? (',' name ('=' init = expr)?)* ';';
+	} (',' name ('=' init = assignmentExpr {
+		$init_expr = $init.e;
+	})?{
+		let text = &$name.text; 
+		let t = $t.v.clone();
+		let result = recog.scope.define_variable(
+			text, 
+			location_for_ctx!($name.ctx),
+			t,
+			(&$init_expr).clone()
+		);
+		report_or_unwrap!(result, recog);
+	})* ';';
 constDef: CONST t = typeName name '=' value = expr ';';
 funcDef:
 	storage ret = typeName name '(' params ')'{
@@ -217,7 +235,7 @@ funcDecl:
 			text,
 			location,
 			func_type,
-			false
+			true
 		);
 		let index = $name.ctx.start().token_index.load(Ordering::Relaxed);
 		report_or_unwrap!(result, recog, index);

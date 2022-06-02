@@ -3,11 +3,14 @@ use crate::parser::errors::ParserError;
 use std::cell::RefCell;
 use std::{collections::HashMap, ops::Range, sync::Arc};
 
+use super::expr::ExprNode;
+
 #[derive(Debug)]
 pub enum Entity {
     Variable {
         name: String,
         location: Range<usize>,
+        init_expr: Option<Box<dyn ExprNode>>,
         _type: Arc<Type>,
     },
     Function {
@@ -81,12 +84,13 @@ impl Scope {
         name: &str,
         location: Range<usize>,
         _type: Arc<Type>,
+        expr: Option<Box<dyn ExprNode>>,
     ) -> Result<Arc<Entity>, ParserError> {
         self.stack
             .last()
             .unwrap()
             .borrow_mut()
-            .define_variable(name, location, _type)
+            .define_variable(name, location, _type, expr)
     }
     pub fn define_function(
         &mut self,
@@ -148,6 +152,7 @@ impl SubScope {
         name: &str,
         location: Range<usize>,
         _type: Arc<Type>,
+        expr: Option<Box<dyn ExprNode>>,
     ) -> Result<Arc<Entity>, ParserError> {
         if let Some(v) = self.entities.get(name) {
             return Err(ParserError::EntityNameConflict(
@@ -161,6 +166,7 @@ impl SubScope {
                 name: name.to_string(),
                 location,
                 _type,
+                init_expr: expr,
             }),
         );
         Ok(self.entities.get(name).unwrap().clone())
