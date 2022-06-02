@@ -560,7 +560,6 @@ impl PostfixExprNode {
             }
         } else {
             println!("{expr:?}");
-            // TODO: Allow indexing of pointers
             Err(ParserError::TypeMismatch(
                 "Array".to_string(),
                 expr.get_type().name(),
@@ -687,10 +686,9 @@ pub enum UnaryOp {
     Inc,
     Dec,
     Add,
-    Sub,
+    Neg,
     Not,
     LogicalNot,
-    Neg,
     Deref,
     Addr,
 }
@@ -714,7 +712,6 @@ impl ExprNode for UnaryExprNode {
             UnaryOp::Inc => self.expr.get_type(),
             UnaryOp::Dec => self.expr.get_type(),
             UnaryOp::Add => self.expr.get_type(),
-            UnaryOp::Sub => self.expr.get_type(),
             UnaryOp::LogicalNot => BOOLEAN_TYPE.clone(),
             UnaryOp::Not => self.expr.get_type(),
             UnaryOp::Neg => self.expr.get_type(),
@@ -827,7 +824,23 @@ impl ExprNode for UnaryExprNode {
                     .build_load(expr.into_pointer_value(), "")
                     .as_basic_value_enum()
             }
-            _ => todo!(),
+            UnaryOp::Add => {
+                // we do nothing
+                // unary + is used to ensure int
+                self.expr.value(context, module, builder)
+            }
+            UnaryOp::Not => {
+                let expr = self.expr.value(context, module, builder);
+                assert!(expr.is_int_value());
+                builder.build_not(expr.into_int_value(), "").as_basic_value_enum()
+            }
+            UnaryOp::LogicalNot => {
+                let expr = self.expr.value(context, module, builder);
+                assert!(expr.is_int_value());
+                let expr = expr.into_int_value();
+                builder.build_int_compare(IntPredicate::EQ, expr, expr.get_type().const_zero(), "").as_basic_value_enum()
+            }
+            
         }
     }
 }
