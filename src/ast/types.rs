@@ -1,5 +1,13 @@
 use std::{cmp::max, ops::Range, sync::Arc};
 
+use inkwell::{
+    context::{Context, ContextRef},
+    types::{AnyType, AnyTypeEnum, BasicType, BasicTypeEnum},
+    AddressSpace,
+};
+
+use crate::parser::errors::ParserError;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
     Void,
@@ -162,6 +170,119 @@ impl Type {
     }
     pub fn is_struct(&self) -> bool {
         matches!(self, Type::Struct { .. })
+    }
+    pub fn to_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
+        match &self {
+            Type::Integer { size, .. } => context
+                .custom_width_int_type(*size as u32)
+                .as_basic_type_enum(),
+            Type::Array { size, element_type } => match element_type.to_llvm_type(context) {
+                BasicTypeEnum::ArrayType(a) => a.array_type(*size as u32).as_basic_type_enum(),
+                BasicTypeEnum::IntType(t) => t.array_type(*size as u32).as_basic_type_enum(),
+                BasicTypeEnum::PointerType(t) => t.array_type(*size as u32).as_basic_type_enum(),
+                BasicTypeEnum::StructType(t) => t.array_type(*size as u32).as_basic_type_enum(),
+                BasicTypeEnum::VectorType(_) => unreachable!(),
+                _ => panic!("Array of {:?} isn't allowed!", element_type),
+            },
+            Type::Pointer { element_type } => {
+                if matches!(&**element_type, Type::Void) {
+                    context
+                        .i8_type()
+                        .ptr_type(AddressSpace::Generic)
+                        .as_basic_type_enum()
+                } else {
+                    match element_type.to_llvm_type(context) {
+                        BasicTypeEnum::ArrayType(a) => {
+                            a.ptr_type(AddressSpace::Generic).as_basic_type_enum()
+                        }
+                        BasicTypeEnum::IntType(t) => {
+                            t.ptr_type(AddressSpace::Generic).as_basic_type_enum()
+                        }
+                        BasicTypeEnum::PointerType(t) => {
+                            t.ptr_type(AddressSpace::Generic).as_basic_type_enum()
+                        }
+                        BasicTypeEnum::StructType(t) => {
+                            t.ptr_type(AddressSpace::Generic).as_basic_type_enum()
+                        }
+                        BasicTypeEnum::VectorType(_) => unreachable!(),
+                        BasicTypeEnum::FloatType(_) => unreachable!(),
+                    }
+                }
+            }
+            Type::Struct {
+                name,
+                fields,
+                location,
+            } => {
+                let mut llvm_fields = Vec::new();
+                for (name, field_type) in fields {
+                    llvm_fields.push(field_type.to_llvm_type(context));
+                }
+                context
+                    .struct_type(&llvm_fields, false)
+                    .as_basic_type_enum()
+            }
+            _ => {
+                panic!("to_llvm_type called for {:?}", self.name());
+            }
+        }
+    }
+    pub fn is_legal(&self) -> Result<(), ParserError> {
+        match self {
+            Type::Void => Err(ParserError::IllegalType(self.name(), None)),
+            Type::Integer { .. } => Ok(()),
+            Type::Array { size, element_type } => {
+                // element must be legal
+                if matches!(&**element_type, Type::Void) {
+                    Err(ParserError::IllegalType(self.name(), None))
+                } else {
+                    element_type.is_legal()?;
+                    // size must be legal
+                    if *size == 0 {
+                        Err(ParserError::IllegalType(self.name(), None))
+                    } else {
+                        Ok(())
+                    }
+                }
+            }
+            Type::Function {
+                return_type,
+                parameters,
+                variadic,
+            } => {
+                // allow return void, check legal for other return type
+                if !matches!(&**return_type, Type::Void) && return_type.is_legal().is_err() {
+                    return Err(ParserError::IllegalType(self.name(), None));
+                }
+                if matches!(&**return_type, Type::Array { .. }) {
+                    return Err(ParserError::IllegalType(self.name(), None));
+                }
+                for parameter in parameters {
+                    if parameter.is_legal().is_err() {
+                        return Err(ParserError::IllegalType(self.name(), None));
+                    }
+                }
+                Ok(())
+            }
+            Type::Pointer { element_type } => {
+                // pointer to arbitrary type is allowed
+                Ok(())
+            }
+            Type::Struct {
+                fields, location, ..
+            } => {
+                // all fields must be legal
+                for (name, field_type) in fields {
+                    if field_type.is_legal().is_err() {
+                        return Err(ParserError::IllegalType(
+                            self.name(),
+                            Some(location.clone()),
+                        ));
+                    }
+                }
+                Ok(())
+            }
+        }
     }
 }
 

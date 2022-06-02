@@ -38,6 +38,9 @@ quick_error! {
         TypeNotFound(name: String) {
             display("Type {} not found", name)
         }
+        TypeNameConflict(name: String, location: Range<usize>) {
+            display("Type name {} already exists", name)
+        }
         EntityNameConflict(name: String, previous_index: Range<usize>) {
             display("Variable {} exists", name)
         }
@@ -81,6 +84,9 @@ quick_error! {
         InvalidOperation(location: Range<usize>) {
             display("Invalid operation")
         }
+        IllegalType(name: String, location: Option<Range<usize>>) {
+            display("Illegal type {}", name)
+        }
     }
 }
 
@@ -92,6 +98,14 @@ impl ParserError {
                 .with_message(format!("Type {name} not found"))
                 .with_labels(vec![Label::primary(file_id.clone(), range)
                     .with_message(format!("Type {name} not found"))]),
+            ParserError::TypeNameConflict(name, location) => Diagnostic::error()
+                .with_message(format!("Type name {} already exists", name))
+                .with_labels(vec![
+                    Label::primary(file_id.clone(), range)
+                        .with_message(format!("Type {name} is already defined!")),
+                    Label::secondary(file_id.clone(), location.clone())
+                        .with_message("Previously defined here".to_string()),
+                ]),
             ParserError::EntityNameConflict(name, previously_occur) => Diagnostic::error()
                 .with_message(format!("Entity {name} is already defined!"))
                 .with_labels(vec![
@@ -189,6 +203,13 @@ impl ParserError {
                 .with_message("Invalid operation")
                 .with_labels(vec![Label::primary(file_id.clone(), location.clone())
                     .with_message("Invalid operation")]),
+            ParserError::IllegalType(name, location) => Diagnostic::error()
+                .with_message(format!("Illegal type {name}"))
+                .with_labels(vec![Label::primary(
+                    file_id.clone(),
+                    location.clone().or(Some(range)).unwrap(),
+                )
+                .with_message(format!("Illegal type {name}"))]),
         }
     }
 }

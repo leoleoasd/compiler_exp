@@ -4,9 +4,11 @@
 
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token_stream::TokenStream;
+use antlr_rust::tree::Visitable;
 use antlr_rust::Parser;
 use antlr_rust::{int_stream::IntStream, token::Token, InputStream};
 use clap::Parser as ClapParser;
+use inkwell::context::Context;
 use parser::cbparser::CbParser;
 use parser::errors::CodeSpanListener;
 use std::fs;
@@ -18,8 +20,10 @@ use std::{
     rc::Rc,
 };
 
+use crate::codegen::CodeGen;
 use crate::parser::{cblexer, errors};
 mod ast;
+mod codegen;
 mod parser;
 
 #[derive(ClapParser, Debug)]
@@ -82,8 +86,10 @@ fn main() {
     parser.add_error_listener(Box::new(listener));
     let result = parser.compUnit().unwrap();
     println!("{:?}", result);
-    // println!("{:#?}", parser.types);
-    // println!("{:#?}", parser.scope);
+
+    let context = Box::leak(Box::new(Context::create()));
+    let mut codegen = CodeGen::new(context, cli.name.to_string(), parser);
+    result.accept(&mut codegen);
 }
 
 fn preprocess(file: &str) -> Result<String, io::Error> {

@@ -92,8 +92,21 @@ macro_rules! report_or_unwrap {
 	scope: Scope::new(),
 }
 @parser::members {
-	fn registerType(&mut self, name: String, t: Arc<Type>) {
-		self.types.insert(name, t);
+	fn registerType(&mut self, name: String, t: Arc<Type>) -> Result<(), ParserError> {
+		let r = self.types.insert(name.clone(), t.clone());
+		if r.is_none() {
+			Ok(())
+		} else {
+			let old = r.unwrap();
+			if let Type::Struct{location, ..} = &*old{
+				Err(ParserError::TypeNameConflict(
+					name,
+					location.clone()
+				))
+			} else {
+				unreachable!();
+			}
+		}
 	}
 	fn getType(&self, name: &str) -> Option<Arc<Type>> {
 		self.types.get(name).cloned()
@@ -171,7 +184,9 @@ compUnit: topDef+ EOF;
 name: IDENTIFIER;
 topDef: funcDef | funcDecl | varDef | constDef | structDef;
 // TODO: support unionDef TODO: support typeDef;
-varDef locals [
+varDef returns [
+	Option<Arc<Entity>> e
+] locals [
 	Option<Box<dyn ExprNode>> init_expr
 ]:
 	s = storage t = typeName name ('=' init = assignmentExpr {
@@ -185,7 +200,7 @@ varDef locals [
 			t,
 			(&$init_expr).clone()
 		);
-		report_or_unwrap!(result, recog);
+		$e = Some(report_or_unwrap!(result, recog));
 	} (',' name ('=' init = assignmentExpr {
 		$init_expr = $init.e;
 	})?{
@@ -197,10 +212,12 @@ varDef locals [
 			t,
 			(&$init_expr).clone()
 		);
-		report_or_unwrap!(result, recog);
+		$e = Some(report_or_unwrap!(result, recog));
 	})* ';';
 constDef: CONST t = typeName name '=' value = expr ';';
-funcDef:
+funcDef returns [
+	Option<Arc<Entity>> e
+] :
 	storage ret = typeName name '(' params ')'{
 		let ret_type = $ret.v;
 		let (param, variadic) = $params.v.borrow().clone();
@@ -218,9 +235,11 @@ funcDef:
 			false
 		);
 		let index = $name.ctx.start().token_index.load(Ordering::Relaxed);
-		report_or_unwrap!(result, recog, index);
+		$e = Some(report_or_unwrap!(result, recog, index));
 	} body = block;
-funcDecl:
+funcDecl returns [
+	Option<Arc<Entity>> e
+] :
 	EXTERN ret = typeName name '(' paramsDecl ')' ';' {
 		let ret_type = $ret.v;
 		let (param, variadic) = $paramsDecl.v.borrow().clone();
@@ -238,7 +257,7 @@ funcDecl:
 			true
 		);
 		let index = $name.ctx.start().token_index.load(Ordering::Relaxed);
-		report_or_unwrap!(result, recog, index);
+		$e = Some(report_or_unwrap!(result, recog, index));
 };
 storage: STATIC?;
 params
@@ -286,14 +305,15 @@ defvarList: vars = varDef*;
 structDef:
 	STRUCT name memberList ';' {
 	let name = $name.text.to_owned();
-	let location = $start.start as usize .. recog.get_current_token().stop as usize;
+	let location = $start.start as usize .. recog.get_current_token().stop as usize - 3;
 	let selfType = Arc::new(Type::Struct{
 		name, 
 		fields: $memberList.v.borrow().clone().into_iter().map(|x| (x.0, x.1)).collect(),
 		location
 	});
+	report_or_unwrap!(selfType.is_legal(), recog);
 	let name = $name.text.to_owned();
-    recog.registerType(name, selfType);
+    report_or_unwrap!(recog.registerType(name, selfType), recog, $name.ctx.start().token_index.load(Ordering::Relaxed));
 };
 // unionDef: UNION name memberList ';' { let name = $name.text.to_owned(); let selfType =
 // types::UnionType{name, fields: $memberList.v}; recog.registerType(name, selfType.into()); };

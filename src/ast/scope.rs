@@ -1,6 +1,9 @@
+use inkwell::values::{FunctionValue, PointerValue};
+
 use crate::ast::types::Type;
 use crate::parser::errors::ParserError;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
+use std::sync::Weak;
 use std::{collections::HashMap, ops::Range, sync::Arc};
 
 use super::expr::ExprNode;
@@ -12,12 +15,14 @@ pub enum Entity {
         location: Range<usize>,
         init_expr: Option<Box<dyn ExprNode>>,
         _type: Arc<Type>,
+        llvm: Option<*const PointerValue<'static>>,
     },
     Function {
         name: String,
         location: Range<usize>,
         _type: Arc<Type>,
         _extern: bool,
+        llvm: Option<*const FunctionValue<'static>>,
     },
 }
 
@@ -61,6 +66,13 @@ impl Scope {
     }
     pub fn push(&mut self) -> Arc<RefCell<SubScope>> {
         let s = Arc::new(RefCell::new(SubScope::new()));
+        self.stack
+            .last()
+            .unwrap()
+            .borrow_mut()
+            .children
+            .push(s.clone());
+        s.borrow_mut().parent = Some(Arc::<_>::downgrade(self.stack.last().unwrap()));
         self.stack.push(s.clone());
         self.all_scopes.push(s.clone());
         s
@@ -112,18 +124,29 @@ impl Scope {
 #[derive(Debug)]
 pub struct SubScope {
     // parent: &'scope Scope<'scope>,
-    children: Vec<SubScope>,
+    children: Vec<Arc<RefCell<SubScope>>>,
     entities: HashMap<String, Arc<Entity>>,
+    parent: Option<Weak<RefCell<SubScope>>>,
 }
 impl SubScope {
     fn new() -> SubScope {
         SubScope {
             children: Vec::new(),
             entities: HashMap::new(),
+            parent: None,
         }
     }
     fn get(&self, name: &str) -> Option<Arc<Entity>> {
         self.entities.get(name).map(|s| s.to_owned())
+    }
+    pub fn get_recursive(&self, name: &str) -> Option<Arc<Entity>> {
+        if let Some(e) = self.get(name) {
+            return Some(e);
+        }
+        match self.parent {
+            Some(ref p) => p.upgrade().unwrap().borrow().get_recursive(name),
+            None => None,
+        }
     }
     fn define_function(
         &mut self,
@@ -143,6 +166,7 @@ impl SubScope {
             location,
             _type,
             _extern,
+            llvm: None,
         });
         self.entities.insert(name.to_owned(), e.clone());
         Ok(e)
@@ -167,6 +191,7 @@ impl SubScope {
                 location,
                 _type,
                 init_expr: expr,
+                llvm: None,
             }),
         );
         Ok(self.entities.get(name).unwrap().clone())
