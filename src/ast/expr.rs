@@ -23,8 +23,6 @@ pub enum ConstValue {
 pub trait ExprNode: Node {
     fn get_type(&self) -> Arc<Type>;
     fn is_addressable(&self) -> bool;
-    fn is_constant(&self) -> bool;
-    fn get_const_value(&self) -> Option<ConstValue>;
     fn value(
         &self,
         context: &'static Context,
@@ -116,12 +114,6 @@ impl ExprNode for IntegerLiteralNode {
     fn is_addressable(&self) -> bool {
         false
     }
-    fn is_constant(&self) -> bool {
-        true
-    }
-    fn get_const_value(&self) -> Option<ConstValue> {
-        Some(ConstValue::Int(self.value))
-    }
     fn value(
         &self,
         context: &'static Context,
@@ -160,12 +152,6 @@ impl ExprNode for CharLiteralNode {
     }
     fn is_addressable(&self) -> bool {
         false
-    }
-    fn is_constant(&self) -> bool {
-        true
-    }
-    fn get_const_value(&self) -> Option<ConstValue> {
-        Some(ConstValue::Char(self.value))
     }
     fn value(
         &self,
@@ -206,12 +192,6 @@ impl ExprNode for StringLiteralNode {
     fn is_addressable(&self) -> bool {
         false
     }
-    fn is_constant(&self) -> bool {
-        true
-    }
-    fn get_const_value(&self) -> Option<ConstValue> {
-        Some(ConstValue::String(self.value.clone()))
-    }
     fn value(
         &self,
         context: &'static Context,
@@ -250,12 +230,6 @@ impl ExprNode for EntityNode {
     }
     fn is_addressable(&self) -> bool {
         true
-    }
-    fn is_constant(&self) -> bool {
-        false
-    }
-    fn get_const_value(&self) -> Option<ConstValue> {
-        None
     }
     fn value(
         &self,
@@ -330,12 +304,6 @@ impl ExprNode for PostfixExprNode {
             PostOp::MemberOf(_) => self.expr.is_addressable(),
             PostOp::FuncCall(_) => false, // rvalue
         }
-    }
-    fn is_constant(&self) -> bool {
-        false
-    }
-    fn get_const_value(&self) -> Option<ConstValue> {
-        None
     }
     fn addr(
         &self,
@@ -722,14 +690,6 @@ impl ExprNode for UnaryExprNode {
         matches!(self.op, UnaryOp::Deref)
     }
 
-    fn is_constant(&self) -> bool {
-        false
-    }
-
-    fn get_const_value(&self) -> Option<ConstValue> {
-        None
-    }
-
     fn addr(
         &self,
         context: &'static Context,
@@ -832,15 +792,18 @@ impl ExprNode for UnaryExprNode {
             UnaryOp::Not => {
                 let expr = self.expr.value(context, module, builder);
                 assert!(expr.is_int_value());
-                builder.build_not(expr.into_int_value(), "").as_basic_value_enum()
+                builder
+                    .build_not(expr.into_int_value(), "")
+                    .as_basic_value_enum()
             }
             UnaryOp::LogicalNot => {
                 let expr = self.expr.value(context, module, builder);
                 assert!(expr.is_int_value());
                 let expr = expr.into_int_value();
-                builder.build_int_compare(IntPredicate::EQ, expr, expr.get_type().const_zero(), "").as_basic_value_enum()
+                builder
+                    .build_int_compare(IntPredicate::EQ, expr, expr.get_type().const_zero(), "")
+                    .as_basic_value_enum()
             }
-            
         }
     }
 }
@@ -1005,12 +968,6 @@ impl ExprNode for CastExprNode {
     fn is_addressable(&self) -> bool {
         false
     }
-    fn is_constant(&self) -> bool {
-        false
-    }
-    fn get_const_value(&self) -> Option<ConstValue> {
-        None
-    }
 }
 impl CastExprNode {
     pub fn new(
@@ -1123,13 +1080,6 @@ impl ExprNode for BinaryExprNode {
     }
     fn is_addressable(&self) -> bool {
         false
-    }
-    fn is_constant(&self) -> bool {
-        // todo: Support constant
-        false
-    }
-    fn get_const_value(&self) -> Option<ConstValue> {
-        None
     }
     fn value(
         &self,
@@ -1530,14 +1480,6 @@ impl ExprNode for CondExprNode {
         // todo
         false
     }
-
-    fn is_constant(&self) -> bool {
-        false
-    }
-
-    fn get_const_value(&self) -> Option<ConstValue> {
-        None
-    }
 }
 impl CondExprNode {
     pub fn new(
@@ -1594,14 +1536,6 @@ impl ExprNode for AssignExprNode {
 
     fn is_addressable(&self) -> bool {
         false
-    }
-
-    fn is_constant(&self) -> bool {
-        false
-    }
-
-    fn get_const_value(&self) -> Option<ConstValue> {
-        None
     }
 
     fn value(

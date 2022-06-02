@@ -39,4 +39,9 @@ int main(int argc, char** argv){
     }
     printf("A + B = %d\n", add(2, array[0]));
     printf("argv: %s\n", argv[0]);
+    if (!1) {
+        printf("not reached");
+    } else {
+        printf("good\n");
+    }
 }
