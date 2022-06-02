@@ -87,9 +87,13 @@ fn main() {
     let result = parser.compUnit().unwrap();
     println!("{:?}", result);
 
-    let context = Box::leak(Box::new(Context::create()));
-    let mut codegen = CodeGen::new(context, cli.name.to_string(), parser);
-    result.accept(&mut codegen);
+    let context: &'static mut Context = Box::leak(Box::new(Context::create()));
+    let codegen = Box::leak(Box::new(CodeGen::new(
+        context,
+        cli.name.to_string(),
+        parser,
+    )));
+    codegen.gen(result);
 }
 
 fn preprocess(file: &str) -> Result<String, io::Error> {

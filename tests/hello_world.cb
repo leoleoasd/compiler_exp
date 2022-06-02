@@ -3,7 +3,6 @@ int b = 2;
 struct foo{
     int bar;
 };
-struct foo{};
 int main(int argc, char []* argv) {
     int t = 0;
     int _a = 0, b, c;

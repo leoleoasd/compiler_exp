@@ -1,7 +1,11 @@
 use crate::parser::errors::ParserError;
 
 use super::{node::Node, scope::Entity, types::Type};
+use inkwell::builder::Builder;
+use inkwell::context::Context;
+use inkwell::values::{BasicValue, BasicValueEnum};
 use lazy_static::lazy_static;
+use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Range;
 use std::sync::Arc;
@@ -17,6 +21,13 @@ pub trait ExprNode: Node {
     fn is_addressable(&self) -> bool;
     fn is_constant(&self) -> bool;
     fn get_const_value(&self) -> Option<ConstValue>;
+    fn value(
+        &self,
+        context: &'static Context,
+        builder: &Builder<'static>,
+    ) -> BasicValueEnum<'static> {
+        todo!()
+    }
 }
 dyn_clone::clone_trait_object!(ExprNode);
 
@@ -70,6 +81,17 @@ impl ExprNode for IntegerLiteralNode {
     }
     fn get_const_value(&self) -> Option<ConstValue> {
         Some(ConstValue::Int(self.value))
+    }
+    fn value(
+        &self,
+        context: &'static Context,
+        builder: &Builder<'static>,
+    ) -> BasicValueEnum<'static> {
+        self.get_type()
+            .to_llvm_type(context)
+            .into_int_type()
+            .const_int(self.value as u64, false)
+            .as_basic_value_enum()
     }
 }
 impl IntegerLiteralNode {
@@ -148,7 +170,7 @@ impl StringLiteralNode {
 }
 #[derive(Debug, Clone)]
 pub struct EntityNode {
-    entity: Arc<Entity>,
+    entity: Arc<RefCell<Entity>>,
     location: Range<usize>,
 }
 impl Node for EntityNode {
@@ -158,7 +180,7 @@ impl Node for EntityNode {
 }
 impl ExprNode for EntityNode {
     fn get_type(&self) -> Arc<Type> {
-        self.entity.get_type()
+        self.entity.borrow().get_type()
     }
     fn is_addressable(&self) -> bool {
         true
@@ -171,7 +193,7 @@ impl ExprNode for EntityNode {
     }
 }
 impl EntityNode {
-    pub fn new(entity: Arc<Entity>, location: Range<usize>) -> Self {
+    pub fn new(entity: Arc<RefCell<Entity>>, location: Range<usize>) -> Self {
         EntityNode { entity, location }
     }
 }

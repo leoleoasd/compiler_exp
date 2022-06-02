@@ -2,7 +2,7 @@ use inkwell::values::{FunctionValue, PointerValue};
 
 use crate::ast::types::Type;
 use crate::parser::errors::ParserError;
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::sync::Weak;
 use std::{collections::HashMap, ops::Range, sync::Arc};
 
@@ -15,14 +15,14 @@ pub enum Entity {
         location: Range<usize>,
         init_expr: Option<Box<dyn ExprNode>>,
         _type: Arc<Type>,
-        llvm: Option<*const PointerValue<'static>>,
+        llvm: Option<PointerValue<'static>>,
     },
     Function {
         name: String,
         location: Range<usize>,
         _type: Arc<Type>,
         _extern: bool,
-        llvm: Option<*const FunctionValue<'static>>,
+        llvm: Option<FunctionValue<'static>>,
     },
 }
 
@@ -49,7 +49,7 @@ impl Entity {
 
 #[derive(Debug)]
 pub struct Scope {
-    root: Arc<RefCell<SubScope>>,
+    pub root: Arc<RefCell<SubScope>>,
     stack: Vec<Arc<RefCell<SubScope>>>,
     all_scopes: Vec<Arc<RefCell<SubScope>>>,
     // make 'scope invariant
@@ -83,7 +83,7 @@ impl Scope {
             panic!("Top scope is being poped!");
         }
     }
-    pub fn get(&mut self, name: &str) -> Option<Arc<Entity>> {
+    pub fn get(&mut self, name: &str) -> Option<Arc<RefCell<Entity>>> {
         for s in self.stack.iter().rev() {
             if s.borrow().get(name).is_some() {
                 return Some(s.borrow().get(name).unwrap());
@@ -97,7 +97,7 @@ impl Scope {
         location: Range<usize>,
         _type: Arc<Type>,
         expr: Option<Box<dyn ExprNode>>,
-    ) -> Result<Arc<Entity>, ParserError> {
+    ) -> Result<Arc<RefCell<Entity>>, ParserError> {
         self.stack
             .last()
             .unwrap()
@@ -110,7 +110,7 @@ impl Scope {
         location: Range<usize>,
         _type: Arc<Type>,
         _extern: bool,
-    ) -> Result<Arc<Entity>, ParserError> {
+    ) -> Result<Arc<RefCell<Entity>>, ParserError> {
         if self.stack.len() != 1 {
             return Err(ParserError::InvalidFunctionDefination(name.to_string()));
         }
@@ -125,7 +125,7 @@ impl Scope {
 pub struct SubScope {
     // parent: &'scope Scope<'scope>,
     children: Vec<Arc<RefCell<SubScope>>>,
-    entities: HashMap<String, Arc<Entity>>,
+    pub entities: HashMap<String, Arc<RefCell<Entity>>>,
     parent: Option<Weak<RefCell<SubScope>>>,
 }
 impl SubScope {
@@ -136,10 +136,10 @@ impl SubScope {
             parent: None,
         }
     }
-    fn get(&self, name: &str) -> Option<Arc<Entity>> {
+    fn get(&self, name: &str) -> Option<Arc<RefCell<Entity>>> {
         self.entities.get(name).map(|s| s.to_owned())
     }
-    pub fn get_recursive(&self, name: &str) -> Option<Arc<Entity>> {
+    pub fn get_recursive(&self, name: &str) -> Option<Arc<RefCell<Entity>>> {
         if let Some(e) = self.get(name) {
             return Some(e);
         }
@@ -154,20 +154,20 @@ impl SubScope {
         location: Range<usize>,
         _type: Arc<Type>,
         _extern: bool,
-    ) -> Result<Arc<Entity>, ParserError> {
+    ) -> Result<Arc<RefCell<Entity>>, ParserError> {
         if let Some(v) = self.entities.get(name) {
             return Err(ParserError::EntityNameConflict(
                 name.to_string(),
-                v.get_location().clone(),
+                v.borrow().get_location().clone(),
             ));
         }
-        let e = Arc::new(Entity::Function {
+        let e = Arc::new(RefCell::new(Entity::Function {
             name: name.to_owned(),
             location,
             _type,
             _extern,
             llvm: None,
-        });
+        }));
         self.entities.insert(name.to_owned(), e.clone());
         Ok(e)
     }
@@ -177,22 +177,22 @@ impl SubScope {
         location: Range<usize>,
         _type: Arc<Type>,
         expr: Option<Box<dyn ExprNode>>,
-    ) -> Result<Arc<Entity>, ParserError> {
+    ) -> Result<Arc<RefCell<Entity>>, ParserError> {
         if let Some(v) = self.entities.get(name) {
             return Err(ParserError::EntityNameConflict(
                 name.to_string(),
-                v.get_location().clone(),
+                v.borrow().get_location().clone(),
             ));
         }
         self.entities.insert(
             name.to_string(),
-            Arc::new(Entity::Variable {
+            Arc::new(RefCell::new(Entity::Variable {
                 name: name.to_string(),
                 location,
                 _type,
                 init_expr: expr,
                 llvm: None,
-            }),
+            })),
         );
         Ok(self.entities.get(name).unwrap().clone())
     }

@@ -184,9 +184,7 @@ compUnit: topDef+ EOF;
 name: IDENTIFIER;
 topDef: funcDef | funcDecl | varDef | constDef | structDef;
 // TODO: support unionDef TODO: support typeDef;
-varDef returns [
-	Option<Arc<Entity>> e
-] locals [
+varDef locals [
 	Option<Box<dyn ExprNode>> init_expr
 ]:
 	s = storage t = typeName name ('=' init = assignmentExpr {
@@ -200,7 +198,7 @@ varDef returns [
 			t,
 			(&$init_expr).clone()
 		);
-		$e = Some(report_or_unwrap!(result, recog));
+		report_or_unwrap!(result, recog);
 	} (',' name ('=' init = assignmentExpr {
 		$init_expr = $init.e;
 	})?{
@@ -212,12 +210,10 @@ varDef returns [
 			t,
 			(&$init_expr).clone()
 		);
-		$e = Some(report_or_unwrap!(result, recog));
+		report_or_unwrap!(result, recog);
 	})* ';';
 constDef: CONST t = typeName name '=' value = expr ';';
-funcDef returns [
-	Option<Arc<Entity>> e
-] :
+funcDef:
 	storage ret = typeName name '(' params ')'{
 		let ret_type = $ret.v;
 		let (param, variadic) = $params.v.borrow().clone();
@@ -235,11 +231,9 @@ funcDef returns [
 			false
 		);
 		let index = $name.ctx.start().token_index.load(Ordering::Relaxed);
-		$e = Some(report_or_unwrap!(result, recog, index));
+		report_or_unwrap!(result, recog, index);
 	} body = block;
-funcDecl returns [
-	Option<Arc<Entity>> e
-] :
+funcDecl:
 	EXTERN ret = typeName name '(' paramsDecl ')' ';' {
 		let ret_type = $ret.v;
 		let (param, variadic) = $paramsDecl.v.borrow().clone();
@@ -257,7 +251,7 @@ funcDecl returns [
 			true
 		);
 		let index = $name.ctx.start().token_index.load(Ordering::Relaxed);
-		$e = Some(report_or_unwrap!(result, recog, index));
+		report_or_unwrap!(result, recog, index);
 };
 storage: STATIC?;
 params

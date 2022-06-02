@@ -1,8 +1,8 @@
 use std::{cmp::max, ops::Range, sync::Arc};
 
 use inkwell::{
-    context::{Context, ContextRef},
-    types::{AnyType, AnyTypeEnum, BasicType, BasicTypeEnum},
+    context::{Context},
+    types::{BasicType, BasicTypeEnum},
     AddressSpace,
 };
 
@@ -171,7 +171,7 @@ impl Type {
     pub fn is_struct(&self) -> bool {
         matches!(self, Type::Struct { .. })
     }
-    pub fn to_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
+    pub fn to_llvm_type(&self, context: &'static Context) -> BasicTypeEnum<'static> {
         match &self {
             Type::Integer { size, .. } => context
                 .custom_width_int_type(*size as u32)
