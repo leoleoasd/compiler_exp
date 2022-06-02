@@ -400,7 +400,14 @@ impl ExprNode for PostfixExprNode {
             },
             PostOp::FuncCall(args) => {
                 let func_entity_node = (&*self.expr as &dyn Any).downcast_ref::<EntityNode>().unwrap();
-                let args = args.iter().map(|arg| arg.value(context, module, builder).into()).collect::<Vec<_>>();
+                let args_type = func_entity_node.entity.borrow().get_type().param_types();
+                let args = args.iter().enumerate().map(|(index, arg)| {
+                    if index < args_type.len() {
+                        arg.cast_value(context, module, builder, args_type[index].clone())
+                    } else {
+                        arg.value(context, module, builder)
+                    }
+                .into()}).collect::<Vec<_>>();
                 let ret = builder.build_call(
                     func_entity_node.entity.borrow().as_function().llvm.unwrap(), &args, "").try_as_basic_value();
                 ret.left().or_else(|| {
@@ -593,7 +600,7 @@ impl PostfixExprNode {
                 ));
             }
             for (index, (exp, act)) in parameters.iter().zip(args.iter()).enumerate() {
-                if exp.1 != act.get_type() {
+                if !exp.1.is_compatible(&act.get_type()) {
                     return Err(ParserError::ArgumentTypeMismatch(
                         index,
                         exp.1.name(),

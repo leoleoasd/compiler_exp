@@ -7,12 +7,12 @@ struct test{
     int foo;
     char bar;
 };
-int add(int a, int b){
-    return a + b;
+int add(int a, int[] b){
+    return a + b[0];
 }
 int main(int argc, char** argv){
-    int[5] array;
-    int* array_ptr = array;
+    int[5][2] array;
+    int[5]* array_ptr = array;
     struct test ss;
     struct test* ss_pointer = &ss;
     ss.foo = 1234;
@@ -20,9 +20,9 @@ int main(int argc, char** argv){
     printf(str + 3);
     printf("This is %d %d\n", 2 + 1238796, a);
     printf("Argc: %d\n", argc);
-    array[0] = 0x123;
-    printf("array[0] = %d\n", array[0]);
-    printf("array_ptr[0] = %d\n", array_ptr[0]);
+    array[0][0] = 0x123;
+    printf("array[0][0] = %d\n", array[0][0]);
+    printf("array_ptr[0][0] = %d\n", array_ptr[0][0]);
     if(argc == 1) {
         printf("Then\n");
         return -1;
@@ -37,5 +37,6 @@ int main(int argc, char** argv){
         ss_pointer->foo = 0;
         printf("%d\n", ss.foo);
     }
-    pritnf("A + B = %d\n", add(2,3));
+    printf("A + B = %d\n", add(2, array[0]));
+    printf("argv: %s\n", argv[0]);
 }

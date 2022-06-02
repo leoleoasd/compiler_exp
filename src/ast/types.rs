@@ -114,6 +114,12 @@ impl Type {
             _ => None,
         }
     }
+    pub fn param_types(&self) -> Vec<Arc<Type>> {
+        match self {
+            Type::Function { parameters, .. } => parameters.iter().map(|(_, t)| t.clone()).collect(),
+            _ => vec![],
+        }
+    }
     pub fn is_compatible(&self, other: &Type) -> bool {
         match (self, other) {
             (Type::Void, Type::Void) => true,
