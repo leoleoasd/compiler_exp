@@ -3,7 +3,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token_stream::TokenStream;
 

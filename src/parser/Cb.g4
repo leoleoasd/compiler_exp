@@ -28,6 +28,9 @@ grammar Cb;
 #![allow(clippy::type_complexity)]
 #![allow(clippy::or_fun_call)]
 #![allow(clippy::nonminimal_bool)]
+#![allow(clippy::new_ret_no_self)]
+#![allow(clippy::tabs_in_doc_comments)]
+#![allow(clippy::double_parens)]
 use std::collections::HashMap;
 use crate::ast::scope::Scope;
 use crate::ast::scope::SubScope;
@@ -94,17 +97,17 @@ macro_rules! report_or_unwrap {
 @parser::members {
 	fn registerType(&mut self, name: String, t: Arc<Type>) -> Result<(), ParserError> {
 		let r = self.types.insert(name.clone(), t.clone());
-		if r.is_none() {
-			Ok(())
-		} else {
-			let old = r.unwrap();
-			if let Type::Struct{location, ..} = &*old{
-				Err(ParserError::TypeNameConflict(
-					name,
-					location.clone()
-				))
-			} else {
-				unreachable!();
+		match r {
+			None=> Ok(()),
+			Some(old) => {
+				if let Type::Struct{ location, .. } = &*old{
+					Err(ParserError::TypeNameConflict(
+						name,
+						location.clone()
+					))
+				} else {
+					unreachable!();
+				}
 			}
 		}
 	}

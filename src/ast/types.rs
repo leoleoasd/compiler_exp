@@ -1,9 +1,14 @@
-use std::{cmp::{max, Ordering}, ops::Range, sync::Arc};
+use std::{
+    cmp::{max, Ordering},
+    ops::Range,
+    sync::Arc,
+};
 
 use inkwell::{
     context::Context,
     types::{BasicType, BasicTypeEnum},
-    AddressSpace, values::InstructionOpcode,
+    values::InstructionOpcode,
+    AddressSpace,
 };
 
 use crate::parser::errors::ParserError;
@@ -82,7 +87,11 @@ impl Type {
             element_type: s,
         })
     }
-    pub fn function_type(s: Arc<Self>, parameters: Vec<(String, Arc<Type>)>, variadic: bool) -> Arc<Type> {
+    pub fn function_type(
+        s: Arc<Self>,
+        parameters: Vec<(String, Arc<Type>)>,
+        variadic: bool,
+    ) -> Arc<Type> {
         Arc::new(Type::Function {
             return_type: s,
             parameters,
@@ -110,13 +119,16 @@ impl Type {
         match self {
             Type::Struct { fields, .. } => fields
                 .iter()
-                .position(|(name, _)| name == field).map(|x| x as u32),
+                .position(|(name, _)| name == field)
+                .map(|x| x as u32),
             _ => None,
         }
     }
     pub fn param_types(&self) -> Vec<Arc<Type>> {
         match self {
-            Type::Function { parameters, .. } => parameters.iter().map(|(_, t)| t.clone()).collect(),
+            Type::Function { parameters, .. } => {
+                parameters.iter().map(|(_, t)| t.clone()).collect()
+            }
             _ => vec![],
         }
     }
@@ -298,7 +310,7 @@ impl Type {
             }
         }
     }
-    
+
     pub fn cast_op(&self, to_type: &Type) -> InstructionOpcode {
         match (self, to_type) {
             (

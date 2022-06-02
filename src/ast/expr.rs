@@ -1,14 +1,14 @@
 use crate::parser::errors::ParserError;
 
 use super::scope::VariableEntity;
-use std::any::Any;
 use super::{node::Node, scope::Entity, types::Type};
-use inkwell::{AddressSpace, IntPredicate};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::values::{BasicValue, BasicValueEnum, PointerValue};
+use inkwell::{AddressSpace, IntPredicate};
 use lazy_static::lazy_static;
+use std::any::Any;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Range;
@@ -27,16 +27,18 @@ pub trait ExprNode: Node {
     fn get_const_value(&self) -> Option<ConstValue>;
     fn value(
         &self,
-            context: &'static Context,
-            module: &'static Module,
-            builder: &Builder<'static>,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
     ) -> BasicValueEnum<'static> {
         todo!("value of {:?} isn't implemented", self)
     }
-    fn addr(&self, 
-            context: &'static Context,
-            module: &'static Module,
-            builder: &Builder<'static>) -> PointerValue<'static> {
+    fn addr(
+        &self,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
+    ) -> PointerValue<'static> {
         todo!("addr of {:?} isn't implemented", self)
     }
     fn cast_value(
@@ -53,9 +55,7 @@ pub trait ExprNode: Node {
             if Type::element_type(self.get_type()) == Type::element_type(to_type) {
                 let value = self.addr(context, module, builder);
                 let zero = context.i32_type().const_int(0, false);
-                let addr = unsafe {
-                    builder.build_gep(value, &[zero, zero], "")
-                };
+                let addr = unsafe { builder.build_gep(value, &[zero, zero], "") };
                 return addr.as_basic_value_enum();
             } else {
                 panic!("cannot cast array to pointer with another element");
@@ -124,9 +124,9 @@ impl ExprNode for IntegerLiteralNode {
     }
     fn value(
         &self,
-            context: &'static Context,
-            module: &'static Module,
-            builder: &Builder<'static>,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
     ) -> BasicValueEnum<'static> {
         self.get_type()
             .to_llvm_type(context)
@@ -169,9 +169,9 @@ impl ExprNode for CharLiteralNode {
     }
     fn value(
         &self,
-            context: &'static Context,
-            module: &'static Module,
-            builder: &Builder<'static>,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
     ) -> BasicValueEnum<'static> {
         self.get_type()
             .to_llvm_type(context)
@@ -213,11 +213,11 @@ impl ExprNode for StringLiteralNode {
         Some(ConstValue::String(self.value.clone()))
     }
     fn value(
-            &self,
-            context: &'static Context,
-            module: &'static Module,
-            builder: &Builder<'static>,
-        ) -> BasicValueEnum<'static> {
+        &self,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
+    ) -> BasicValueEnum<'static> {
         let vector = context.const_string(self.value.as_bytes(), true);
         let ptr = module.add_global(vector.get_type(), Some(AddressSpace::Local), "");
         ptr.set_initializer(&vector);
@@ -259,17 +259,22 @@ impl ExprNode for EntityNode {
     }
     fn value(
         &self,
-            context: &'static Context,
-            module: &'static Module,
-            builder: &Builder<'static>,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
     ) -> BasicValueEnum<'static> {
         let addr = self.addr(context, module, builder);
-        builder.build_load(addr, &format!("load variable {}", self.entity.borrow().get_name()))
+        builder.build_load(
+            addr,
+            &format!("load variable {}", self.entity.borrow().get_name()),
+        )
     }
-    fn addr(&self, 
-            context: &'static Context,
-            module: &'static Module,
-            builder: &Builder<'static>) -> PointerValue<'static> {
+    fn addr(
+        &self,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
+    ) -> PointerValue<'static> {
         // must be variable
         if let Entity::Variable(VariableEntity { llvm, .. }) = &*self.entity.borrow() {
             llvm.unwrap()
@@ -323,7 +328,7 @@ impl ExprNode for PostfixExprNode {
             PostOp::Index(_) => true,           // inner expr shoudl be addressable
             PostOp::MemberOfPointer(_) => true, // inner expr shoudl be addressable
             PostOp::MemberOf(_) => self.expr.is_addressable(),
-            PostOp::FuncCall(_) => false,                             // rvalue
+            PostOp::FuncCall(_) => false, // rvalue
         }
     }
     fn is_constant(&self) -> bool {
@@ -332,98 +337,152 @@ impl ExprNode for PostfixExprNode {
     fn get_const_value(&self) -> Option<ConstValue> {
         None
     }
-    fn addr(&self, 
-            context: &'static Context,
-            module: &'static Module,
-            builder: &Builder<'static>) -> PointerValue<'static> {
+    fn addr(
+        &self,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
+    ) -> PointerValue<'static> {
         match &self.op {
             PostOp::MemberOf(field) => {
                 assert!(self.expr.is_addressable());
                 let addr = self.expr.addr(context, module, builder);
                 let index = self.expr.get_type().field_index(field).unwrap();
-                builder.build_struct_gep(addr, index, &format!("field {}", field)).unwrap()
-            },
+                builder
+                    .build_struct_gep(addr, index, &format!("field {}", field))
+                    .unwrap()
+            }
             PostOp::MemberOfPointer(field) => {
-                let addr = self.expr.value(context, module, builder).into_pointer_value();
-                let index = Type::element_type(self.expr.get_type()).field_index(field).unwrap();
-                builder.build_struct_gep(addr, index, &format!("field {}", field)).unwrap()
-            },
+                let addr = self
+                    .expr
+                    .value(context, module, builder)
+                    .into_pointer_value();
+                let index = Type::element_type(self.expr.get_type())
+                    .field_index(field)
+                    .unwrap();
+                builder
+                    .build_struct_gep(addr, index, &format!("field {}", field))
+                    .unwrap()
+            }
             PostOp::Index(index) => {
                 assert!(self.expr.is_addressable());
                 if self.expr.get_type().is_array() {
                     let addr = self.expr.addr(context, module, builder);
                     let index = index.value(context, module, builder).into_int_value();
                     let zero = context.i32_type().const_zero();
-                    unsafe {builder.build_gep(addr, &[zero, index], "")}
+                    unsafe { builder.build_gep(addr, &[zero, index], "") }
                 } else {
                     // is pointer
-                    let addr = self.expr.value(context, module, builder).into_pointer_value();
+                    let addr = self
+                        .expr
+                        .value(context, module, builder)
+                        .into_pointer_value();
                     let index = index.value(context, module, builder).into_int_value();
-                    unsafe {builder.build_gep(addr, &[index], "")}
+                    unsafe { builder.build_gep(addr, &[index], "") }
                 }
-            },
-            _ => unreachable!()
+            }
+            _ => unreachable!(),
         }
     }
     fn value(
-            &self,
-            context: &'static Context,
-            module: &'static Module,
-            builder: &Builder<'static>,
-        ) -> BasicValueEnum<'static> {
+        &self,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
+    ) -> BasicValueEnum<'static> {
         match &self.op {
             PostOp::Inc => {
                 let expr = self.expr.value(context, module, builder);
                 if expr.is_int_value() {
-                    let inc = builder.build_int_add(expr.into_int_value(), expr.get_type().into_int_type().const_int(1, false), "");
+                    let inc = builder.build_int_add(
+                        expr.into_int_value(),
+                        expr.get_type().into_int_type().const_int(1, false),
+                        "",
+                    );
                     builder.build_store(self.expr.addr(context, module, builder), inc);
                 } else if expr.is_pointer_value() {
-                    let inc =unsafe {builder.build_gep(expr.into_pointer_value(), &[context.i8_type().const_int(1, false)], "")};
+                    let inc = unsafe {
+                        builder.build_gep(
+                            expr.into_pointer_value(),
+                            &[context.i8_type().const_int(1, false)],
+                            "",
+                        )
+                    };
                     builder.build_store(self.expr.addr(context, module, builder), inc);
                 } else {
                     unreachable!()
                 }
                 expr
-            },
+            }
             PostOp::Dec => {
                 let expr = self.expr.value(context, module, builder);
                 if expr.is_int_value() {
-                    let dec = builder.build_int_sub(expr.into_int_value(), expr.get_type().into_int_type().const_int(1, false), "");
+                    let dec = builder.build_int_sub(
+                        expr.into_int_value(),
+                        expr.get_type().into_int_type().const_int(1, false),
+                        "",
+                    );
                     builder.build_store(self.expr.addr(context, module, builder), dec);
                 } else if expr.is_pointer_value() {
-                    let dec =unsafe {builder.build_gep(expr.into_pointer_value(), &[context.i8_type().const_int(u64::MAX, true)], "")};
+                    let dec = unsafe {
+                        builder.build_gep(
+                            expr.into_pointer_value(),
+                            &[context.i8_type().const_int(u64::MAX, true)],
+                            "",
+                        )
+                    };
                     builder.build_store(self.expr.addr(context, module, builder), dec);
                 } else {
                     unreachable!()
                 }
                 expr
-            },
+            }
             PostOp::FuncCall(args) => {
-                let func_entity_node = (&*self.expr as &dyn Any).downcast_ref::<EntityNode>().unwrap();
+                let func_entity_node = (&*self.expr as &dyn Any)
+                    .downcast_ref::<EntityNode>()
+                    .unwrap();
                 let args_type = func_entity_node.entity.borrow().get_type().param_types();
-                let args = args.iter().enumerate().map(|(index, arg)| {
-                    if index < args_type.len() {
-                        arg.cast_value(context, module, builder, args_type[index].clone())
-                    } else {
-                        arg.value(context, module, builder)
-                    }
-                .into()}).collect::<Vec<_>>();
-                let ret = builder.build_call(
-                    func_entity_node.entity.borrow().as_function().llvm.unwrap(), &args, "").try_as_basic_value();
-                ret.left().or_else(|| {
-                    // is void
-                    // should not be used
-                    // so we will return a zero instead
-                    Some(context.i32_type().const_zero().as_basic_value_enum())
-                }).unwrap()
+                let args = args
+                    .iter()
+                    .enumerate()
+                    .map(|(index, arg)| {
+                        if index < args_type.len() {
+                            arg.cast_value(context, module, builder, args_type[index].clone())
+                        } else {
+                            arg.value(context, module, builder)
+                        }
+                        .into()
+                    })
+                    .collect::<Vec<_>>();
+                let ret = builder
+                    .build_call(
+                        func_entity_node.entity.borrow().as_function().llvm.unwrap(),
+                        &args,
+                        "",
+                    )
+                    .try_as_basic_value();
+                ret.left()
+                    .or_else(|| {
+                        // is void
+                        // should not be used
+                        // so we will return a zero instead
+                        Some(context.i32_type().const_zero().as_basic_value_enum())
+                    })
+                    .unwrap()
             }
             PostOp::MemberOf(field) => {
-                let expr = self.expr.value(context, module, builder).into_struct_value();
+                let expr = self
+                    .expr
+                    .value(context, module, builder)
+                    .into_struct_value();
                 let index = self.expr.get_type().as_ref().field_index(field).unwrap();
                 builder.build_extract_value(expr, index as u32, "").unwrap()
             }
             PostOp::MemberOfPointer(field) => {
-                let expr = self.expr.value(context, module, builder).into_pointer_value();
+                let expr = self
+                    .expr
+                    .value(context, module, builder)
+                    .into_pointer_value();
                 let index = self.expr.get_type().as_ref().field_index(field).unwrap();
                 let addr = builder.build_struct_gep(expr, index as u32, "").unwrap();
                 builder.build_load(addr, "")
@@ -674,76 +733,102 @@ impl ExprNode for UnaryExprNode {
         None
     }
 
-    fn addr(&self, 
-                context: &'static Context,
-                module: &'static Module,
-                builder: &Builder<'static>) -> PointerValue<'static> {
+    fn addr(
+        &self,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
+    ) -> PointerValue<'static> {
         match &self.op {
             UnaryOp::Deref => {
                 let expr = self.expr.value(context, module, builder);
                 assert!(expr.is_pointer_value());
                 expr.into_pointer_value()
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
-    
+
     fn value(
-            &self,
-                context: &'static Context,
-                module: &'static Module,
-                builder: &Builder<'static>,
-        ) -> BasicValueEnum<'static> {
-            match &self.op {
-                UnaryOp::Inc => {
-                    let expr = self.expr.value(context, module, builder);
-                    let inc;
-                    if expr.is_int_value() {
-                        let _inc = builder.build_int_add(expr.into_int_value(), expr.get_type().into_int_type().const_int(1, false), "");
-                        builder.build_store(self.expr.addr(context, module, builder), _inc);
-                        inc = _inc.as_basic_value_enum();
-                    } else if expr.is_pointer_value() {
-                        let _inc =unsafe {builder.build_gep(expr.into_pointer_value(), &[context.i8_type().const_int(1, false)], "")};
-                        builder.build_store(self.expr.addr(context, module, builder), _inc);
-                        inc = _inc.as_basic_value_enum();
-                    } else {
-                        unreachable!()
-                    }
-                    inc
-                },
-                UnaryOp::Dec => {
-                    let expr = self.expr.value(context, module, builder);
-                    let inc;
-                    if expr.is_int_value() {
-                        let _inc = builder.build_int_add(expr.into_int_value(), expr.get_type().into_int_type().const_int(1, false), "");
-                        builder.build_store(self.expr.addr(context, module, builder), _inc);
-                        inc = _inc.as_basic_value_enum();
-                    } else if expr.is_pointer_value() {
-                        let _inc =unsafe {builder.build_gep(expr.into_pointer_value(), &[context.i8_type().const_int(u64::MAX, false)], "")};
-                        builder.build_store(self.expr.addr(context, module, builder), _inc);
-                        inc = _inc.as_basic_value_enum();
-                    } else {
-                        unreachable!()
-                    }
-                    inc
+        &self,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
+    ) -> BasicValueEnum<'static> {
+        match &self.op {
+            UnaryOp::Inc => {
+                let expr = self.expr.value(context, module, builder);
+                let inc;
+                if expr.is_int_value() {
+                    let _inc = builder.build_int_add(
+                        expr.into_int_value(),
+                        expr.get_type().into_int_type().const_int(1, false),
+                        "",
+                    );
+                    builder.build_store(self.expr.addr(context, module, builder), _inc);
+                    inc = _inc.as_basic_value_enum();
+                } else if expr.is_pointer_value() {
+                    let _inc = unsafe {
+                        builder.build_gep(
+                            expr.into_pointer_value(),
+                            &[context.i8_type().const_int(1, false)],
+                            "",
+                        )
+                    };
+                    builder.build_store(self.expr.addr(context, module, builder), _inc);
+                    inc = _inc.as_basic_value_enum();
+                } else {
+                    unreachable!()
                 }
-                UnaryOp::Neg => {
-                    let expr = self.expr.value(context, module, builder);
-                    assert!(expr.is_int_value());
-                    builder.build_int_neg(expr.into_int_value(), "").as_basic_value_enum()
-                }
-                UnaryOp::Addr => {
-                    assert!(self.expr.is_addressable());
-                    let expr = self.expr.addr(context, module, builder);
-                    expr.as_basic_value_enum()
-                }
-                UnaryOp::Deref => {
-                    let expr = self.expr.value(context, module, builder);
-                    assert!(expr.is_pointer_value());
-                    builder.build_load(expr.into_pointer_value(), "").as_basic_value_enum()
-                }
-                _ => todo!()
+                inc
             }
+            UnaryOp::Dec => {
+                let expr = self.expr.value(context, module, builder);
+                let inc;
+                if expr.is_int_value() {
+                    let _inc = builder.build_int_add(
+                        expr.into_int_value(),
+                        expr.get_type().into_int_type().const_int(1, false),
+                        "",
+                    );
+                    builder.build_store(self.expr.addr(context, module, builder), _inc);
+                    inc = _inc.as_basic_value_enum();
+                } else if expr.is_pointer_value() {
+                    let _inc = unsafe {
+                        builder.build_gep(
+                            expr.into_pointer_value(),
+                            &[context.i8_type().const_int(u64::MAX, false)],
+                            "",
+                        )
+                    };
+                    builder.build_store(self.expr.addr(context, module, builder), _inc);
+                    inc = _inc.as_basic_value_enum();
+                } else {
+                    unreachable!()
+                }
+                inc
+            }
+            UnaryOp::Neg => {
+                let expr = self.expr.value(context, module, builder);
+                assert!(expr.is_int_value());
+                builder
+                    .build_int_neg(expr.into_int_value(), "")
+                    .as_basic_value_enum()
+            }
+            UnaryOp::Addr => {
+                assert!(self.expr.is_addressable());
+                let expr = self.expr.addr(context, module, builder);
+                expr.as_basic_value_enum()
+            }
+            UnaryOp::Deref => {
+                let expr = self.expr.value(context, module, builder);
+                assert!(expr.is_pointer_value());
+                builder
+                    .build_load(expr.into_pointer_value(), "")
+                    .as_basic_value_enum()
+            }
+            _ => todo!(),
+        }
     }
 }
 impl UnaryExprNode {
@@ -963,27 +1048,35 @@ impl BinaryOp {
         match self {
             BinaryOp::Eq => IntPredicate::EQ,
             BinaryOp::Ne => IntPredicate::NE,
-            BinaryOp::Lt => if signed {
-                IntPredicate::SLT
-            } else {
-                IntPredicate::ULT
-            },
-            BinaryOp::Le => if signed {
-                IntPredicate::SLE
-            } else {
-                IntPredicate::ULE
-            },
-            BinaryOp::Gt => if signed {
-                IntPredicate::SGT
-            } else {
-                IntPredicate::UGT
-            },
-            BinaryOp::Ge => if signed {
-                IntPredicate::SGE
-            } else {
-                IntPredicate::UGE
-            },
-            _ => unreachable!()
+            BinaryOp::Lt => {
+                if signed {
+                    IntPredicate::SLT
+                } else {
+                    IntPredicate::ULT
+                }
+            }
+            BinaryOp::Le => {
+                if signed {
+                    IntPredicate::SLE
+                } else {
+                    IntPredicate::ULE
+                }
+            }
+            BinaryOp::Gt => {
+                if signed {
+                    IntPredicate::SGT
+                } else {
+                    IntPredicate::UGT
+                }
+            }
+            BinaryOp::Ge => {
+                if signed {
+                    IntPredicate::SGE
+                } else {
+                    IntPredicate::UGE
+                }
+            }
+            _ => unreachable!(),
         }
     }
 }
@@ -1003,8 +1096,14 @@ impl ExprNode for BinaryExprNode {
     fn get_type(&self) -> Arc<Type> {
         // return BOOLEAN_TYPE for logical operators
         match self.op {
-            BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Ge |
-            BinaryOp::Gt | BinaryOp::Le | BinaryOp::Lt => BOOLEAN_TYPE.clone(),
+            BinaryOp::LogicalAnd
+            | BinaryOp::LogicalOr
+            | BinaryOp::Eq
+            | BinaryOp::Ne
+            | BinaryOp::Ge
+            | BinaryOp::Gt
+            | BinaryOp::Le
+            | BinaryOp::Lt => BOOLEAN_TYPE.clone(),
             BinaryOp::Comma => self.rhs.get_type(),
             _ => Type::binary_cast(self.lhs.get_type(), self.rhs.get_type()).unwrap(),
         }
@@ -1020,44 +1119,72 @@ impl ExprNode for BinaryExprNode {
         None
     }
     fn value(
-            &self,
-                context: &'static Context,
-                module: &'static Module,
-                builder: &Builder<'static>,
-        ) -> BasicValueEnum<'static> {
+        &self,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
+    ) -> BasicValueEnum<'static> {
         match &self.op {
             BinaryOp::Add => {
                 let result_type = self.get_type();
                 if result_type.is_integer() {
-                    let lhs = self.lhs.cast_value(context, module, builder, result_type.clone()).into_int_value();
-                    let rhs = self.rhs.cast_value(context, module, builder, result_type).into_int_value();
+                    let lhs = self
+                        .lhs
+                        .cast_value(context, module, builder, result_type.clone())
+                        .into_int_value();
+                    let rhs = self
+                        .rhs
+                        .cast_value(context, module, builder, result_type)
+                        .into_int_value();
                     builder.build_int_add(lhs, rhs, "").as_basic_value_enum()
                 } else {
                     let lhs = self.lhs.value(context, module, builder);
                     let rhs = self.rhs.value(context, module, builder);
                     if lhs.is_pointer_value() {
                         assert!(rhs.is_int_value());
-                        unsafe {builder.build_gep(lhs.into_pointer_value(), &[rhs.into_int_value()], "")}.as_basic_value_enum()
+                        unsafe {
+                            builder.build_gep(lhs.into_pointer_value(), &[rhs.into_int_value()], "")
+                        }
+                        .as_basic_value_enum()
                     } else {
                         assert!(lhs.is_int_value());
-                        unsafe {builder.build_gep(rhs.into_pointer_value(), &[lhs.into_int_value()], "")}.as_basic_value_enum()
+                        unsafe {
+                            builder.build_gep(rhs.into_pointer_value(), &[lhs.into_int_value()], "")
+                        }
+                        .as_basic_value_enum()
                     }
                 }
             }
-            BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Ge |
-            BinaryOp::Gt | BinaryOp::Le | BinaryOp::Lt => {
-                let result_type = Type::binary_cast(self.lhs.get_type(), self.rhs.get_type()).unwrap();
-                let lhs = self.lhs.cast_value(context, module, builder, result_type.clone()).into_int_value();
-                let rhs = self.rhs.cast_value(context, module, builder, result_type.clone()).into_int_value();
+            BinaryOp::Eq
+            | BinaryOp::Ne
+            | BinaryOp::Ge
+            | BinaryOp::Gt
+            | BinaryOp::Le
+            | BinaryOp::Lt => {
+                let result_type =
+                    Type::binary_cast(self.lhs.get_type(), self.rhs.get_type()).unwrap();
+                let lhs = self
+                    .lhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
+                let rhs = self
+                    .rhs
+                    .cast_value(context, module, builder, result_type.clone())
+                    .into_int_value();
                 let signed;
-                if let Type::Integer { signed: signed1, ..} = &*result_type {
+                if let Type::Integer {
+                    signed: signed1, ..
+                } = &*result_type
+                {
                     signed = *signed1;
                 } else {
                     signed = false;
                 }
-                builder.build_int_compare(self.op.to_llvm_op(signed), lhs, rhs, "").as_basic_value_enum()
+                builder
+                    .build_int_compare(self.op.to_llvm_op(signed), lhs, rhs, "")
+                    .as_basic_value_enum()
             }
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }
@@ -1465,11 +1592,11 @@ impl ExprNode for AssignExprNode {
     }
 
     fn value(
-            &self,
-                context: &'static Context,
-                module: &'static Module,
-                builder: &Builder<'static>,
-        ) -> BasicValueEnum<'static> {
+        &self,
+        context: &'static Context,
+        module: &'static Module,
+        builder: &Builder<'static>,
+    ) -> BasicValueEnum<'static> {
         match self.op {
             AssignOp::Assign => {
                 let rhs = self.rhs.value(context, module, builder);
@@ -1477,7 +1604,7 @@ impl ExprNode for AssignExprNode {
                 builder.build_store(addr, rhs);
                 rhs
             }
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }
