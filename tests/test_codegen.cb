@@ -44,6 +44,7 @@ int main(int argc, char** argv){
     0 || printf("not_reached");
     1 || printf("good\n");
     (0,1) || printf("good\n");
+    printf("1+2*3=%d\n", 1 + 2 * 3 * 3 / 3);
     if (!1) {
         printf("not reached");
     } else {
