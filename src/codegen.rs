@@ -18,7 +18,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::types::{BasicMetadataTypeEnum, BasicTypeEnum};
-use inkwell::values::{BasicValueEnum, FunctionValue, InstructionOpcode};
+use inkwell::values::{BasicValueEnum, FunctionValue, InstructionOpcode, BasicValue};
 use inkwell::AddressSpace;
 
 pub struct CodeGen<I>
@@ -62,7 +62,7 @@ where
                             .add_global(llvm_type, Some(AddressSpace::Local), name.as_str());
                     if let Some(init_expr) = init_expr {
                         // todo check for constexpr
-                        let expr = init_expr.cast_value(self.context, self.module, &self.builder, &_type);
+                        let expr = init_expr.cast_value(self.context, self.module, &self.builder, _type.clone());
                         println!("{:?}", expr);
                         llvm_ptr.set_initializer(&expr);
                     } else {
@@ -191,11 +191,15 @@ where
             let alloca = self.builder.build_alloca(
                 arg_ent._type.to_llvm_type(self.context), name);
             arg_ent.llvm = Some(alloca);
+        }
+        for (name, arg) in &mut scope.entities {
+            let mut arg = arg.borrow_mut();
+            let arg_ent = arg.as_variable_mut();
             if let Some(init_expr) = &arg_ent.init_expr {
-                let expr = init_expr.cast_value(self.context, self.module, &self.builder, &arg_ent._type);
-                self.builder.build_store(alloca, expr);
+                let expr = init_expr.cast_value(self.context, self.module, &self.builder, arg_ent._type.clone());
+                self.builder.build_store(arg_ent.llvm.unwrap(), expr);
             } else {
-                self.builder.build_store(alloca, arg_ent._type.to_llvm_type(self.context).const_zero());
+                self.builder.build_store(arg_ent.llvm.unwrap(), arg_ent._type.to_llvm_type(self.context).const_zero());
             }
         }
         for stmt in block.body.clone().unwrap().stmt_all() {
@@ -213,8 +217,20 @@ where
             StmtContextAll::ContineContext(_) => todo!(),
             StmtContextAll::WhileContext(_) => todo!(),
             StmtContextAll::IfContext(s) => self.gen_if_stmt(s.ifStmt().as_ref().unwrap()),
-            StmtContextAll::ReturnContext(_) => todo!(),
-            StmtContextAll::EmptyContext(_) => todo!(),
+            StmtContextAll::ReturnContext(s) => {
+                let r = s.returnStmt();
+                let expr = r.as_ref().unwrap().expr();
+                let expr = expr.as_ref().unwrap().e.as_ref().map(|expr| {
+                    expr.value(self.context, self.module, &self.builder)
+                });
+                let expr = expr.as_ref().map(|v| {
+                    v as & dyn BasicValue
+                });
+                self.builder.build_return(expr);
+            },
+            StmtContextAll::EmptyContext(_) => {
+                // do nothing
+            },
             StmtContextAll::Error(_) => unreachable!(),
         }
     }

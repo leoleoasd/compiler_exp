@@ -1,16 +1,37 @@
 int a = 0x1234;
 int b = 'a';
-char c = 3;
+char c = 3 + 235;
 extern void printf(char*, ...);
-char * str = "Hello world from Cb lang!\n";
-
-int main(int argc, char* argv){
-    printf(str);
-    printf("This is %d %d\n", 2, a);
+char * str = "___Hello world from Cb lang!\n";
+struct test{
+    int foo;
+    char bar;
+};
+int main(int argc, char** argv){
+    int[5] array;
+    int* array_ptr = array;
+    struct test ss;
+    struct test* ss_pointer = &ss;
+    ss.foo = 1234;
+    printf(&str[3]);
+    printf(str + 3);
+    printf("This is %d %d\n", 2 + 1238796, a);
     printf("Argc: %d\n", argc);
+    array[0] = 0x123;
+    printf("array[0] = %d\n", array[0]);
+    printf("array_ptr[0] = %d\n", array_ptr[0]);
     if(argc == 1) {
         printf("Then\n");
+        return -1;
     } else {
         printf("Else\n");
+    }
+    printf("%d\n", ss.bar);
+    {
+        int* pointer = &ss.bar;
+        *pointer = 0x1234;
+        printf("%d\n", ss.bar);
+        ss_pointer->foo = 0;
+        printf("%d\n", ss.foo);
     }
 }

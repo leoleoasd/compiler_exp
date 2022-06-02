@@ -106,6 +106,14 @@ impl Type {
             _ => None,
         }
     }
+    pub fn field_index(&self, field: &str) -> Option<u32> {
+        match self {
+            Type::Struct { fields, .. } => fields
+                .iter()
+                .position(|(name, _)| name == field).map(|x| x as u32),
+            _ => None,
+        }
+    }
     pub fn is_compatible(&self, other: &Type) -> bool {
         match (self, other) {
             (Type::Void, Type::Void) => true,
