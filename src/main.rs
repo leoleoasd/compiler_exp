@@ -1,5 +1,6 @@
 #![feature(try_blocks)]
 #![feature(trait_upcasting)]
+#![feature(io_read_to_string)]
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
@@ -13,6 +14,7 @@ use inkwell::context::Context;
 use parser::cbparser::CbParser;
 use parser::errors::CodeSpanListener;
 use std::fs;
+use std::io::{BufReader,Read, BufRead, Write};
 use std::{
     io,
     ops::Deref,
@@ -45,12 +47,17 @@ struct Cli {
 fn main() {
     let cli = Cli::parse();
     let code;
+    
+    let reader: Box<dyn BufRead> = match cli.name.as_str() {
+        "-" => Box::new(BufReader::new(io::stdin())),
+        _ => Box::new(BufReader::new(fs::File::open(&cli.name).unwrap())),
+    };
     if cli.preprocess {
-        code = Box::leak(Box::new(preprocess(&cli.name).unwrap()));
+        code = Box::leak(Box::new(preprocess(reader).unwrap()));
         println!("Preprocessed Code:");
         println!("{}", code);
     } else {
-        code = Box::leak(Box::new(fs::read_to_string(&cli.name).unwrap()));
+        code = Box::leak(Box::new(io::read_to_string(reader).unwrap()));
     }
     let mut tokens = lex(code, cli.name.clone()).unwrap();
     let mut token_vec = Vec::new();
@@ -103,20 +110,19 @@ fn main() {
         .wait_with_output().unwrap();
 }
 
-fn preprocess(file: &str) -> Result<String, io::Error> {
-    let file_path = Path::new(file);
+fn preprocess<T>(file: T)  -> Result<String, io::Error> where T: Read {
+    let code = io::read_to_string(file)?;
     // call cpp on file
     #[allow(unused)]
-    let output = Command::new("cpp")
-        .arg(file)
+    let child = Command::new("cpp")
+        .arg("-")
         .arg("-P")
         .arg("-w")
-        .arg("-I")
-        .arg(file_path.parent().unwrap())
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .spawn()
-        .expect("antlr tool failed to start")
-        .wait_with_output()?;
+        .spawn()?;
+    child.stdin.as_ref().unwrap().write_all(code.as_bytes())?;
+    let output = child.wait_with_output()?;
     let code = String::from_utf8(output.stdout).unwrap();
     Ok(code)
 }
