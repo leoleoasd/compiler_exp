@@ -13,9 +13,11 @@ fn main() {
 fn gen_for_grammar() -> Result<(), Box<dyn Error>> {
     let input = env::current_dir().unwrap().join("src").join("parser");
     let file_name = "Cb.g4";
+    let antlr_path = env::current_dir().unwrap().join("bin").join("antlr.jar");
 
     Command::new("java")
         .current_dir(input)
+        .env("CLASSPATH", antlr_path)
         .arg("org.antlr.v4.Tool")
         .arg("-Dlanguage=Rust")
         .arg("-visitor")
