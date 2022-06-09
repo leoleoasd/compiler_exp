@@ -30,6 +30,8 @@
 \graphicspath{ {./images/} }
 \newcommand{\cb}{$C\,\flat$\xspace}
 \newcommand{\cs}{$C\,\sharp$\xspace}
+\crefname{figure}{图}{图}
+\crefname{algorithm}{算法}{算法}
 \newcounter{fullrefcounter}
 \newcommand*{\fullref}[1]{%
 \addtocounter{fullrefcounter}{1}%
@@ -68,11 +70,185 @@
 
 \tableofcontents
 
+
+\ttfamily
+\songti
+
 \chapter{基于递归下降子程序的三地址代码生成程序}
 \section{词法分析子系统}
 \subsection{实验目的}
+基本掌握计算机语言的词法分析程序的开发方法。
 \subsection{实验内容}
+设计实现一个能够分析三种整数、标识符、主要运算符和主要关键字的词法分析程序。
+
+\begin{outline}[enumerate]
+    \1 根据以下的正规式，编制正规文法，画出状态图；（包含附加要求）
+
+    标识符	 <字母>(<字母>|<数字字符>)*(ε|((\_|.)(<字母>|<数字字符>)+))
+
+    十进制数 ((1|2|3|4|5|6|7|8|9)(0|1|2|3|4|5|6|7|8|9)*|0)(ε|(. (0|1|2|3|4|5|6|7|8|9) (0|1|2|3|4|5|6|7|8|9)* ))
+
+    八进制数 0(0|1|2|3|4|5|6|7)+ (ε|(.(0|1|2|3|4|5|6|7)(0|1|2|3|4|5|6|7)+))
+
+    十六进制数  0x(0|1|2|3|4|5|6|7|8|9|a|b|c|d|e|f) (0|1|2|3|4|5|6|7|8|9|a|b|c|d|e|f)* (ε|(. (0|1|2|3|4|5|6|7|8|9 |a|b|c|d|e|f) (0|1|2|3|4|5|6|7|8|9|a|b|c|d|e|f)+))
+
+    运算符和分隔符	+ | - | * | / | > | < | = | ( | ) | ；
+
+    关键字			if | then | else | while | do
+    
+    \1 根据状态图，设计词法分析函数int scan()，完成以下功能：
+        \2 作为一个独立的程序，从源程序文件中读取源程序，将其变换成相应的符号序列，建议用文件的形式存放这一序列；
+        \2 作为一个独立的子程序设计，从文件中读取源程序，每被调用一次，返回当前的一个单词建议作为中间结果，同时用文件的形式存放相应的单词序列；
+        \2 可以将if、then、else、while、do等作为保留字处理。
+    
+    \1 编写测试程序，反复调用函数scan()，输出单词种别和属性。
+\end{outline}
+
 \subsection{实验结果}
+
+\begin{outline}
+    \1 词法的正规式描述以及变换后的正规文法
+
+    \begin{figure}[htp]
+        \centering
+        \includegraphics[width=0.8\linewidth]{2.1.drawio.pdf}
+        \caption{标识符的状态图}
+        \label{fig:2.1.drawio}
+    \end{figure}
+
+        \2 标识符：<字母>(<字母>|<数字字符>)*(ε|((\_|.)(<字母>|<数字字符>)+))
+
+        描述：字母，或者以字母开头，后跟字母或数字的字符串，且字符间可以用一个下划线\_或一个小数点.相隔
+
+        状态图见\cref{fig:2.1.drawio}。 变换后的正规文法：
+
+        \begin{minted}{text}
+    S→<字母>A
+    A→<字母>A | <数字字符>A |ε| _B | .B
+    B→<字母>B | <数字字符>B | <字母> | <数字字符>   
+        \end{minted}
+
+        \2 十进制数：((1|2|3|4|5|6|7|8|9) (0|1|2|3|4|5|6|7|8|9)*|0) (ε|(. (0|1|2|3|4|5 |6|7|8|9) (0|1|2|3|4|5|6|7|8|9)* ))
+
+        \begin{figure}[htp]
+            \centering
+            \includegraphics[width=0.8\linewidth]{2.2.drawio.pdf}
+            \caption{十进制数的状态图}
+            \label{fig:2.2.drawio}
+        \end{figure}
+
+        描述：整数部分为0-9，或者以不为0开头的由0-9组成的字符串，小数部分为0-9组成的字符串（整体的10进制字符串既可以是整数，也可以是小数）
+        
+        状态图见\cref{fig:2.2.drawio}。变换后的正规文法：
+
+        \begin{minted}{text}
+    S→ 1A | 2A | 3A | 4A | 5A | 6A | 7A | 8A | 9A| 0B
+    A→ 0A | 1A | 2A | 3A | 4A | 5A | 6A | 7A | 8A | 9A| .C |ε
+    B→ .C | ε
+    C→ 0D | 1D | 2D | 3D | 4D | 5D | 6D | 7D | 8D | 9D
+    D→ 0D | 1D | 2D | 3D | 4D | 5D | 6D | 7D | 8D | 9D | ε            
+        \end{minted}
+
+        \2 八进制数 0 (0|1|2|3|4|5|6|7)+ (ε|(.(0|1|2|3|4|5|6|7)(0|1|2|3|4|5|6|7)+))
+
+        \begin{figure}[htp]
+            \centering
+            \includegraphics[width=0.8\linewidth]{2.3.drawio.pdf}
+            \caption{八进制数的状态图}
+            \label{fig:2.3.drawio}
+        \end{figure}
+
+        描述：以0开头由0-7组成的8进制字符串（既可以是整数，也可以是两位及以上小数）
+
+状态图见\cref{fig:2.3.drawio}。变换后的正规文法：
+\begin{minted}{text}
+S→ 0A
+A→ 0B | 1B | 2B | 3B | 4B | 5B | 6B | 7B
+B→ 0B | 1B | 2B | 3B | 4B | 5B | 6B | 7B |ε| .C
+C→ 0D | 1D | 2D | 3D | 4D | 5D | 6D | 7D
+D→ 0E | 1E | 2E | 3E | 4E | 5E | 6E | 7E
+E→ 0E | 1E | 2E | 3E | 4E | 5E | 6E | 7E |ε  
+\end{minted}
+
+\2 十六进制数  0x(0|1|2|3|4|5|6|7|8|9|a|b|c|d|e|f) (0|1|2|3|4|5|6|7|8|9|a|b|c\allowbreak |d|e|f)* (ε|(. (0|1|2|3|4|5|6|7|8|9|a|b|c|d|e|f)(0|1|2|3|4|5|6|7|8|9|a|\allowbreak b|c|d|e|f)+))
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\linewidth]{2.4.drawio.pdf}
+    \caption{十六进制数的状态图}
+    \label{fig:2.4.drawio}
+\end{figure}
+
+描述：以0x开头由0-9,a-f组成的16进制整数或两位及以上小数
+
+状态图见 \cref{fig:2.4.drawio} 变换后的正规文法：
+\begin{minted}[breaklines]{text}
+S→ 0xA | 0XA
+A→ 0B | 1B | 2B | 3B | 4B | 5B | 6B | 7B | 8B | 9B | aB | bB | cB | dB | eB | fB
+B→ 0B | 1B | 2B | 3B | 4B | 5B | 6B | 7B | 8B | 9B | aB | bB | cB | dB | eB | fB |ε| .C 
+C→ 0D | 1D | 2D | 3D | 4D | 5D | 6D | 7D | 8D | 9D | aD | bD | cD | dD | eD | fD  
+D→ 0E | 1E | 2E | 3E | 4E | 5E | 6E | 7E | 8E | 9E | aE | bE | cE | dE | eE | fE   
+E→ 0E | 1E | 2E | 3E | 4E | 5E | 6E | 7E | 8E | 9E | aE | bE | cE | dE | eE | fE | ε
+\end{minted}
+
+\2 运算符和分隔符	+ | - | * | / | > | < | = | ( | ) | ；
+
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\linewidth]{2.6.drawio.pdf}
+    \caption{运算符和分隔符的状态图}
+    \label{fig:2.6.drawio}
+\end{figure}
+
+状态图见\cref{fig:2.6.drawio}。变换后的正规文法：
+
+\begin{minted}{text}
+S→ + | - | * | / | > | < | = | ( | ) | ;
+\end{minted}
+
+\2 关键字			if | then | else | while | do  
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\linewidth]{2.7.drawio.pdf}
+    \caption{关键字}
+    \label{fig:2.7.drawio}
+\end{figure}
+
+状态图见\cref{fig:2.7.drawio}。变换后的正规文法：
+
+\begin{minted}{text}
+S→ if | then | else | while | do
+\end{minted}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\linewidth]{2.5.drawio.pdf}
+    \caption{整数的状态图}
+\end{figure}
+    \1 词法分析程序的数据结构与算法
+\begin{minted}[breaklines]{c}
+enum TYPE     //宏定义类别码
+{
+NONE,IDN,IF,THEN,ELSE,WHILE,DO,INT10,REAL10,INT8,REAL8,
+INT16,REAL16,ADD,SUB,MUL,DIV,EQ,GT,LT,LP,RP,SEMI,ASG, WRONG=-1
+};
+
+char FILTER[4]={' ','\t','\r','\n'};//过滤符
+bool IsFilter(char ch); //判断是否为过滤符
+string KEYWORD[5] = {"if", "then", "else", "while", "do"};//关键字
+int IsKeyword(string str);   //判断是否为关键字
+bool IsLetter(char ch);   //判断是否为字母
+bool IsDigit(char ch);    //判断是否是数字
+int scan(FILE * fpin);  //从源程序文件中读取源程序，根据状态图来判断读入的字符进入哪个状态，从而判断字符串的类别，将其变换成相应的符号序列并以文件的形式存放
+
+\end{minted}
+        
+\end{outline}
+
+
+
 \section{语法分析子系统与三地址代码生成}
 \subsection{实验目的}
 掌握计算机语言的语法分析程序设计与属性文法应用的实现方法。采用适当的方法（递归子程序法、LL分析法、LR分析法，使用Yacc等自动生成工具），设计实现一个能够进行语法分析并生成三地址代码的微型编译程序。
@@ -121,6 +297,7 @@ T’ → *FT’ | /FT’ | ε
 F → (E) | id | int8 | int10 | int16    
 \end{minted}
 \subsection{系统结构说明}
+
 语法分析子系统采用了递归子程序法。具体实现了proc\_P(), proc\_L(), proc\_S(), proc\_C(), proc\_E(), proc\_T(), proc\_F(),这7个子函数。
 从P开始按照P，L，S，C，E，T，F的顺序深入，每一个子程序都会根据当前的 lookhead 值来确定当前读到的内容是否符合自己的产生式。若是就会根据对应的产生式去调用其他的子程序，并从中获取其 code 和 place 来根据语义规则生成自己的 code。并把自己的 code 返回上级。最后逐层返回上一级函数，直到返回到 P，P 会生成最终的三地址代码，并将其输出。
 \subsubsection{数据结构说明}
@@ -171,17 +348,494 @@ struct E_Attr{
 \end{outline}
 \subsubsection{子函数说明}
 \paragraph{Proc\_P()}
-\begin{figure}
+如\cref{fig:p} 和 \cref{fig:proc-p} 所示，分别是P的化简后的语法图和函数\texttt{P()}的流程图。函数P在执行过程中首先调用函数L()。在执行完函数L()之后，将结构体L的code值赋值给结构体P。然后会对当前的lookhead值进行判断。若lookhead不为空，说明;后面还有下一个表达式，需要传入结构体P1，递归调用函数P(P1)。若lookhead为空，说明语法分析已经完成，函数P结束。
+
+\begin{figure}[htp]
     \centering
-    \includegraphics[width = .4\linewidth]{001P.drawio.png}
+    \includegraphics[width = .4\linewidth]{p.drawio.pdf}
+    \caption{P的语法图}
+    \label{fig:p}
 \end{figure}
 
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width = .4\linewidth]{001P.drawio.png.pdf}
+    \caption{函数P的流程图}
+    \label{fig:proc-p}
+\end{figure}
+\paragraph{Proc\_S()}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width = .8\linewidth]{s.drawio.pdf}
+    \caption{S的语法图}
+    \label{fig:s}
+\end{figure}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width = .8\linewidth]{001S.drawio.png.pdf}
+    \caption{函数S的流程图}
+    \label{fig:proc-s}
+\end{figure}
+
+如\cref{fig:s} 和 \cref{fig:proc-s} 所示，分别是S的化简后的语法图和函数S()的流程图。函数S在执行过程中首先会判断lookhead的值。
+
+若lookhead的值为IDN，说明当前处理的生成式是S->id=E。则传入结构体E，调用函数E(E)，在函数E(E)执行完成后，根据语义规则："S.code = E.code || gen(id.place’:=’E.place)"，生成S.code= E.code + " \textbackslash{}n \textbackslash{}t" + IDN的值 + "=" + E.place。
+
+若lookhead的值为IF，说明当前处理的生成式是S-> if C then S1或S-> if C then S1 else S2。则传入结构体C，调用函数C(C)，在函数C(C)执行完成后，再传入结构体S1，递归调用函数S(S1)。然后再判断当前lookhead的值是否为else，若不为else，则根据语义规则"S.code = C.code || gen(C.true’:’) || S1.code"生成S.code= " \textbackslash{}n \textbackslash{}t" + C.code + " \textbackslash{}nL" + C.atrue + ": \textbackslash{}t" + S1.code； 若为else，则继续递归调用函数S(S2)，最后根据语义规则"S.code = C.code || gen(C.true’:’) || S1.code|| gen(‘goto’S.next)|| gen(C.false’:’)|| S2.code;"生成S.code= " \textbackslash{}n \textbackslash{}t" + C.code + " \textbackslash{}nL" + C.atrue + ": \textbackslash{}t" + S1.code + " \textbackslash{}nL" + C.afalse + ": \textbackslash{}t" + S2.code。{\setlength{\emergencystretch}{.3em}\par}
+
+若lookhead的值为WHILE，说明当前处理的生成式是S-> while C do S。则传入结构体C，调用函数C(C)，在函数C(C)执行完成后，再传入结构体S1，递归调用函数S(S1)。最后根据语义规则"S.code = gen(S.begin’:’) || C.code || gen(C.true’:’) || S1.code || gen(‘goto’S.begin);"生成S.code= S->code = " \textbackslash{}nL" + S->begin + ": \textbackslash{}n \textbackslash{}t" + C.code + " \textbackslash{}nL" + C.atrue + ": \textbackslash{}t" + S1.code + " \textbackslash{}n \textbackslash{}tgoto L" + S->begin{\setlength{\emergencystretch}{.14em}\par}
+
+\paragraph{PROC\_C()}
+\begin{figure}
+    \centering
+    \includegraphics[width = .8\linewidth]{c.drawio.pdf}
+    \caption{C的语法图}
+    \label{fig:c}
+\end{figure}
+\begin{figure}
+    \centering
+    \includegraphics[width = .4\linewidth]{001C.drawio.png.pdf}
+    \caption{函数C的流程图}
+    \label{fig:proc-c}
+\end{figure}
+
+如\cref{fig:c} 和 \cref{fig:proc-c} 所示，分别是C的化简后的语法图和函数C()的流程图。函数C在执行过程中首先会传入结构体E1，调用函数E(E1)。在函数E(E1)执行完后，判断lookhead的值。
+
+若lookhead的值为GT，说明当前处理的生成式是C-> E1>E2。则传入结构体E2，调用函数E(E2)，在函数E(E)执行完成后，根据语义规则：“C.code = E1.code || E2.code ||gen(‘if’E1.place’>’E2.place’goto’C.true) ||gen(‘goto’C.false)”，生成C.code= E1.code + E2.code + "\textbackslash{}n\textbackslash{}t if " + E1.place + ">" + E2.place + " goto L" + C->atrue + "\textbackslash{}n\textbackslash{}t goto L" + C->afalse。
+
+若lookhead的值为LT，说明当前处理的生成式是C-> E1<E2。则传入结构体E2，调用函数E(E2)，在函数E(E)执行完成后，根据语义规则：“C.code = E1.code || E2.code ||gen(‘if’E1.place’<’E2.place’goto’C.true) ||gen(‘goto’C.false)”，生成C.code= E1.code + E2.code + "\textbackslash{}n\textbackslash{}t if " + E1.place + "<" + E2.place + " goto L" + C->atrue + "\textbackslash{}n\textbackslash{}t goto L" + C->afalse。
+
+若lookhead的值为EQ，说明当前处理的生成式是C-> E1=E2。则传入结构体E2，调用函数E(E2)，在函数E(E)执行完成后，根据语义规则：“C.code = E1.code || E2.code ||gen(‘if’E1.place’=’E2.place’goto’C.true) ||gen(‘goto’C.false)”，生成C.code= E1.code + E2.code + "\textbackslash{}n\textbackslash{}t if " + E1.place + "=" + E2.place + " goto L" + C->atrue + "\textbackslash{}n\textbackslash{}t goto L" + C->afalse。
+
+\paragraph{PROC\_E()}
+\begin{figure}
+    \centering
+    \includegraphics[width = .8\linewidth]{e.drawio.pdf}
+    \caption{E的语法图}
+    \label{fig:e}
+\end{figure}
+\begin{figure}
+    \centering
+    \includegraphics[width = .4\linewidth]{001E.drawio.png.pdf}
+    \caption{函数E的流程图}
+    \label{fig:proc-e}
+\end{figure}
+如\cref{fig:e} 和 \cref{fig:proc-e} 所示，分别是E的化简后的语法图和函数E()的流程图。函数E在执行过程中首先会传入结构体T1，调用函数T(T1)。在函数T(T1)执行完后，判断lookhead的值。
+
+若lookhead的值为ADD，说明当前处理的生成式是E->T1 + T2。则传入结构体T2，调用函数T(T2)，在函数T(T2)执行完成后，根据语义规则：“E.code = T1.code||T2.code||gen(E.place’:=’T1.place’+’T2.place)”，生成E.code= T1.code+T2.code + "\textbackslash{}n" + "\textbackslash{}t" + E->place + "=" + T1.place + " + " + T2.place。
+
+若lookhead的值为SUB，说明当前处理的生成式是E->T1 - T2。则传入结构体T2，调用函数T(T2)，在函数T(T2)执行完成后，根据语义规则：“E.code = T1.code||T2.code||gen(E.place’:=’T1.place’-’T2.place)”，生成E.code= T1.code + T2.code + "\textbackslash{}n" + "\textbackslash{}t" + E->place + "=" + T1.place + "-" + T2.place。
+
+若lookhead不是上述；两个值中的任何一个，说明当前产生式不是E的产生式处理的，此时将T1的code和place赋值给E，然后结束函数。
+
+\paragraph{PROC\_T()}
+\begin{figure}
+    \centering
+    \includegraphics[width = .8\linewidth]{t.drawio.pdf}
+    \caption{T的语法图}
+    \label{fig:t}
+\end{figure}
+\begin{figure}
+    \centering
+    \includegraphics[width = .4\linewidth]{001T.drawio.png.pdf}
+    \caption{函数T的流程图}
+    \label{fig:proc-t}
+\end{figure}
+如\cref{fig:t} 和 \cref{fig:proc-t} 所示，分别是T的化简后的语法图和函数E()的流程图。函数T在执行过程中首先会传入结构体F1，调用函数F(F1)。在函数F(F1)执行完后，判断lookhead的值。
+若lookhead的值为MUL，说明当前处理的生成式是T->F1 * F2。则传入结构体F2，调用函数F(F2)，在函数F(F2)执行完成后，根据语义规则：“T.code = F1.code || F2.code ||gen(T.place’:=’F1.place’*’F2.place)”，生成F.code= F1.code + F2.code + "\textbackslash{}n" + "\textbackslash{}t" + T->place + "=" + F1.place + "*" + F2.place。
+
+若lookhead的值为DIV，说明当前处理的生成式是T->F1 / F2。则传入结构体F2，调用函数F(F2)，在函数F(F2)执行完成后，根据语义规则：“T.code = F1.code || F2.code ||gen(T.place’:=’F1.place’/’F2.place)”，生成F.code= F1.code + F2.code + "\textbackslash{}n" + "\textbackslash{}t" + T->place + "=" + F1.place + "/" + F2.place。
+
+若lookhead不是上述；两个值中的任何一个，说明当前产生式不是T的产生式处理的，此时将F1的code和place赋值给T，然后结束函数。
+
+\paragraph{PROC\_F()}
+\begin{figure}
+    \centering
+    \includegraphics[width = .8\linewidth]{f.drawio.pdf}
+    \caption{F的语法图}
+    \label{fig:f}
+\end{figure}
+\begin{figure}
+    \centering
+    \includegraphics[width = .8\linewidth]{001F.drawio.png.pdf}
+    \caption{函数F的流程图}
+    \label{fig:proc-f}
+\end{figure}
+如\cref{fig:f} 和 \cref{fig:proc-f} 所示，分别是F的化简后的语法图和函数F()的流程图。函数F首先会判断lookhead的值。
+
+若lookhead的值为INT8,INT10,INT16,REAL8,REAL10或REAL16，说明当前处理的生成式是F-> INT8|INT10|INT16|REAL8|REAL10|REAL16。此时，将读取到的数值转化成10进制数赋值给F.place，F.code = ‘ ’。
+
+若lookhead的值为IDN，说明当前处理的生成式是F-> id。此时，将读取到的标识符id的值赋值给F.place，F.code = ‘ ’
+
+若lookhead的值为LP；说明当前处理的生成式是F-> (E)。传入结构体E，调用函数E(E)，在函数E(E)执行完成后，将E的code和place赋值给F，然后结束函数。
 
 \subsection{实验结果}
+\subsubsection{测试1}
+输入：
+\begin{minted}{text}
+while (a3+15)>0xa do if x2 = 7.233 then while y<z do y = x * y / z; c=b*c+d;
+\end{minted}
+
+输出：
+
+\begin{minted}{tex}
+L1:
+    t1=a3+15.000000
+    if t1>10.000000 goto L2
+    goto L0
+L2:
+    if x2=7.233000 goto L3
+    goto L1
+L3:
+L4:
+    if y<z goto L5
+    goto L1
+L5:
+    t2=x*y
+    t3=t2/z
+    y=t3
+    goto L4
+    goto L1
+L0:
+    t4=b*c
+    t5=t4+d
+    c=t5
+\end{minted}
+
+如上所示，输入为实验指导书中所提供的。观察可知，三地址码生成正确。
+
+\subsubsection{测试2}
+输入：
+
+\begin{minted}{text}
+while (a3+15)>0xa 
+    do if x2 = 07 
+      then while y<z 
+        do y = x * y / z; 
+  c=b*c+d;
+\end{minted}
+
+输出
+\begin{minted}{text}
+L1:
+    t1=a3+15.000000
+    if t1>10.000000 goto L2
+    goto L0
+L2:
+    if x2=7.000000 goto L3
+    goto L1
+L3:
+L4:
+    if y<z goto L5
+    goto L1
+L5:
+    t2=x*y
+    t3=t2/z
+    y=t3
+    goto L4
+    goto L1
+L0:
+    t4=b*c
+    t5=t4+d
+    c=t5
+\end{minted}
+
+如上所示，输入同测试1为实验指导书中所提供的，但是在其中加入了换行符。观察可知，三地址码生成正确。
+
+\subsubsection{测试3}
+输入：
+\begin{minted}[breaklines]{text}
+while (a3+15)>0xa do if x2 = 7.233 then while y<z do while a<1 do y = x * y / z; c=b*c+d;
+\end{minted}
+
+输出：
+\begin{minted}{text}
+L1:
+    t1=a3+15.000000
+    if t1>10.000000 goto L2
+    goto L0
+L2:
+    if x2=7.233000 goto L3
+    goto L1
+L3:
+L4:
+    if y<z goto L5
+    goto L1
+L5:
+L6:
+    if a<1.000000 goto L7
+    goto L4
+L7:
+    t2=x*y
+    t3=t2/z
+    y=t3
+    goto L6
+    goto L4
+    goto L1
+L0:
+    t4=b*c
+    t5=t4+d
+    c=t5
+\end{minted}
+
+如上所示，输入在实验指导书中所提供的代码基础上增加了一重循环。观察可知，三地址码生成正确。
+
+\subsubsection{测试4}
+输入：
+\begin{minted}{text}
+if a<1 then a=a+1 else a=a-1
+\end{minted}
+
+输出：
+\begin{minted}{text}
+if a<1.000000 goto L1
+    goto L0
+L1:
+    t2=a+1.000000
+    a=t2
+L0:
+    t3=a-1.000000
+    a=t3
+\end{minted}
+如上所示，输入为“if a<1 then a=a+1 else a=a-1”。此输入可以用来测试E->T1+T2；E->T1-T2；C->E1<E2和S-> if C then S1 else S2。观察可知，三地址码生成正确。
+
+\subsubsection{测试5}
+输入：
+\begin{minted}{text}
+if a>1 then a=a*2 else a=a/4;
+\end{minted}
+
+输出：
+\begin{minted}{text}
+if a>1.000000 goto L1
+    goto L0
+L1:
+    t2=a*2.000000
+    a=t2
+L0:
+    t3=a/4.000000
+    a=t3
+\end{minted}
+
+如上所示，输入为“if a>1 then a=a*2 else a=a/4;”。此输入可以用来测试T->F1*F2；T->F1/F2；C->E1>E2和S-> if C then S1 else S2。观察可知，三地址码生成正确。
+
+\subsubsection{测试6}
+输入：
+\begin{minted}{text}
+if a=1 then a=a+3
+\end{minted}
+
+输出：
+\begin{minted}{text}
+if a=1.000000 goto L1
+    goto L0
+L1:
+    t1=a+3.000000
+    a=t1
+L0:
+\end{minted}
+
+如上所示，输入为“if a=1 then a=a+3”。此输入可以用来测试F->(E)；F->IDN；F->INT10和S-> if C then S1。观察可知，三地址码生成正确。
+
+\subsubsection{测试7}
+输入：
+\begin{minted}{text}
+while a>2 do a=a-1;
+\end{minted}
+
+输出：
+\begin{minted}{text}
+L1:
+
+    if a>2.000000 goto L2
+    goto L0
+L2:
+    t1=a-1.000000
+    a=t1
+    goto L1
+L0:
+\end{minted}
+
+如上所示，输入为“while a>2 do a=a-1;”。此输入可以用来测试S-> while C do S1。观察可知，三地址码生成正确。
+
 
 \chapter{LR分析表自动构建系统}
 \section{实验内容}
+LR分析法是一种能根据当前分析栈中状态和向右顺序查看输入串符号就可以唯一确定分析器的动作是移进还是归约，以及用哪个产生式归约的自底向上语法分析算法。对于LR(0)，给定文法，在分析过程中需要LR(0)的分析表对下一步的操作进行分析。
+
+LR分析表具体包括ACTION表和GOTO表，ACTION表告诉分析器栈顶状态为i时，对于下一个输入符号应如何操作；GOTO表表示了当前栈顶状态为i时，遇到文法应该转向哪个状态。
+
+LR分析表的生成过程大致流程为：先从S’->S开始，求闭包，然后产生下一个状态的文法，再求闭包，以此类推。直到没有更多的状态产生。在编写的程序中，会将每个状态编号，并保存每个状态的父子状态，方便输出分析表。
+
 \section{实验结果}
+
+\subsection{数据结构}
+\subsubsection{Sentence类}
+Sentence类是文法的数据结构，存储文法的内容、文法点的位置。
+\begin{minted}{cpp}
+class Sentence{
+    public:
+        string str;
+        int dot;
+
+        Sentence(string str){
+            this->str = str;
+            this->dot = 0;
+        }
+        void addDot(void){          //添加"."
+            this->str.insert(3,".");
+            this->dot = 3;
+        }
+        void moveDot(void){         //后移一位"."
+            this->str[this->dot] = this->str[this->dot+1];
+            this->str[this->dot+1] = '.';
+            this->dot += 1;
+        }
+        void print(){
+            cout << str << endl;
+        }
+};
+\end{minted}
+\subsubsection{DFA类}
+DFA存储状态，包括状态包含的文法、状态编号等。
+\begin{minted}{cpp}
+class DFA{
+    public:
+        vector<Sentence> sentences;
+        int num;//序号
+        int fatherNum;
+        vector<int> sonNum;
+        DFA(Sentence sentences){
+            this->sentences.push_back(sentences);
+            this->num = Snum;
+            Snum++;
+            this->fatherNum = -1;
+        }
+        void print(){
+                cout << num<<endl;
+            for(auto i:sentences){
+                i.print();
+            }
+            cout << "father: " << this->fatherNum << endl;
+            cout << "son: ";
+            for(auto i:sonNum)
+                cout << i << " ";
+            cout << endl;
+        }
+};
+\end{minted}
+\subsection{主要函数功能}
+\subsubsection{Init函数}
+Init函数生成一个新的文法 S' 作为第一个状态的文法，并求其闭包。
+\begin{minted}{cpp}
+void Init(){
+    int i;
+    ifstream in("test.txt");        //输入的文档名
+    if(!in.is_open())               //判断一下是否正常打开
+        cout << "Error";            //失败返回输出
+    for (i = 1;;i++){               //将每一句文法按照Sentence存入input中
+        string str;
+        in >> str;
+        if(str=="#")                //遇到#表明结束了
+            break;
+        Sentence s = Sentence(str);
+        input.push_back(s);
+    }
+    string str = "Z->";             //创建新的文法Z->S
+    str.push_back(input[0].str[0]);
+    Sentence s = Sentence(str);
+    s.addDot();                     //新文法Z->.S
+    DFA dfa = DFA(s);               //把这个新文法放入第一个状态中。
+    LR.push_back(dfa);              //存储状态
+}
+\end{minted}
+\subsubsection{addSentence函数}
+addSentence函数对传入的状态求闭包。
+\begin{minted}{cpp}
+void addSentence(DFA &dfa){             //给状态添加闭包
+    //获得点后面的非终结符
+    char c = dfa.sentences[0].str[dfa.sentences[0].dot + 1];
+    for(auto s:getSetence(input,c)){    //在输入的文法中找终结符相同的
+        s.addDot();                     //给文法加上点
+        dfa.sentences.push_back(s);     //把修改后的文法添加到该状态中
+    }
+}
+\end{minted}
+\subsubsection{findSon函数}
+findSon函数遍历生成的状态，找到每个状态的父子状态。
+\begin{minted}[breaklines]{cpp}
+void findSon(){
+    for (int i = 0; i < LR.size();i++){
+        // 删除重复的状态
+        // compare函数把传入的状态跟所有状态的第一个文法作比较，如果有相同的返回true
+        if(compare(LR[i])){
+            LR.erase(LR.begin()+i);
+            i--;
+            continue;
+        }
+        // 添加语句
+        addSentence(LR[i]);// 给状态添加闭包
+        //扩散
+        for(auto s:LR[i].sentences){    // 对于状态中的每个句子
+            if(s.dot+1==s.str.length()) // 如果点的位置已经到结尾了，不再添加新状态
+                continue;
+            Sentence tempS = s;         // 点没到结尾，添加新状态
+            tempS.moveDot();            // 将点的位置向后移一个
+            LR.push_back(DFA(tempS));   // 创建新的状态，将移动后的文法添加到状态中
+        }
+    }
+    for (int i = 0; i < LR.size();i++)
+        LR[i].num = i;//重编号
+    for (int i = 0; i < LR.size();i++){                 // 遍历生成的这些状态
+        for(auto sentence:LR[i].sentences){             // 遍历状态的文法
+            if(sentence.dot+1==sentence.str.length())   // 跳过结束的文法
+                continue;
+            Sentence tempS = sentence;
+            // 找子状态，所以文法的点向后移动一个，在其他状态中找第一个文法与这个结果相同的状态。
+            tempS.moveDot();
+            // 爹不能是自己
+            for (int t = 0; t < LR.size();t++){         // 遍历其他状态
+                if(LR[t].sentences[0].str==tempS.str){  // 如果找到了
+                    if(t!=i)//不是自己
+                    LR[t].fatherNum = i;        // 将找到的子状态的父亲标为当前状态
+                    LR[i].sonNum.push_back(t);  // 当前状态记录子状态的标号
+                }
+            }
+         }
+    }
+}
+\end{minted}
+
+\subsection{实验结果}
+输入文法：
+\begin{minted}{text}
+E->aA
+E->bB
+A->cA
+A->d
+B->cB
+B->d
+#
+\end{minted}
+输出的分析表：
+\begin{minted}{text}
+    ACTION           GOTO
+     a    b    c    d    #    E    A    B
+0:   S2   S3                  1
+1:                       acc
+2:             S5   S9             4
+3:             S7   S11                 6
+4:   r0   r0   r0   r0   r0
+5:             S5   S9             8
+6:   r2   r2   r2   r2   r2
+7:             S7   S11                 10
+8:   r4   r4   r4   r4   r4
+9:   r5   r5   r5   r5   r5
+10:  r6   r6   r6   r6   r6
+11:  r7   r7   r7   r7   r7
+\end{minted}
 
 \chapter{面向LLVM IR的类C语言编译器}
 本项目完成了一个面向LLVM IR\cite{lattnerLLVMCompilationFramework2004}的类C语言编译器，支持任意维数的数组、指针、结构体等特性，可由LLVM的编译器编译为各个平台的可执行程序，可链接C ABI的动态或静态库。下面，为本项目做一个简单的介绍。
@@ -1164,7 +1818,7 @@ match &mut *ent.borrow_mut() {
                 &self.builder,
                 _type.clone(),
             );
-            // 则赋初值
+            // 赋初值
             llvm_global_value.set_initializer(&expr);
         } else {
             // 否则赋值为0
