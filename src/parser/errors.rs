@@ -44,9 +44,6 @@ quick_error! {
         EntityNameConflict(name: String, previous_index: Range<usize>) {
             display("Variable {} exists", name)
         }
-        VariableNotFound(name: String) {
-            display("Variable {} not found", name)
-        }
         InvalidEscapeSequence(text: String, err: UnescapeError) {
             display("Invalid escape sequence: {}, {:?}", text, err)
             context(text: String, err: UnescapeError) -> (text, err)
@@ -117,10 +114,6 @@ impl ParserError {
                     Label::secondary(file_id.clone(), previously_occur.clone())
                         .with_message("Previously defined here".to_string()),
                 ]),
-            ParserError::VariableNotFound(name) => Diagnostic::error()
-                .with_message(format!("Variable {name} not found"))
-                .with_labels(vec![Label::primary(file_id.clone(), range)
-                    .with_message(format!("Variable {name} not found"))]),
             ParserError::InvalidEscapeSequence(text, err) => Diagnostic::error()
                 .with_message(format!("Invalid escape sequence: {text} {err:?}"))
                 .with_labels(vec![Label::primary(file_id.clone(), range)

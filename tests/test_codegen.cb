@@ -10,7 +10,15 @@ struct test{
 int add(int a, int[] b){
     return a + b[0];
 }
+struct test fooo(void){
+    struct test ret;
+    ret.foo = 2;
+    ret.bar = 'c';
+    return ret;
+}
 int main(int argc, char** argv){
+    auto ret = fooo();
+    printf("%d %c\n", ret.foo, ret.bar);
     int[5][2] array;
     int[5]* array_ptr = array;
     struct test ss;
@@ -30,13 +38,11 @@ int main(int argc, char** argv){
         printf("Else\n");
     }
     printf("%d\n", ss.bar);
-    {
-        int* pointer = &ss.bar;
-        *pointer = 0x1234;
-        printf("%d\n", ss.bar);
-        ss_pointer->foo = 0;
-        printf("%d\n", ss.foo);
-    }
+    int* pointer = &ss.bar;
+    *pointer = 0x1234;
+    printf("%d\n", ss.bar);
+    ss_pointer->foo = 0;
+    printf("%d\n", ss.foo);
     printf("A + B = %d\n", add(2, array[0]));
     printf("argv: %s\n", argv[0]);
     1 && printf("not_reached");
@@ -50,17 +56,15 @@ int main(int argc, char** argv){
     } else {
         printf("good\n");
     }
-    {
-        int i = 0;
-        for(i = 0; i < argc; ++ i){
-            if (i == 3){
-                printf("Break!");
-                break;
-            } else if(i == 2){
-                printf("Contine!");
-                continue;
-            }
-            printf("for %d\n", i);
+    int i = 0;
+    for(i = 0; i < argc; ++ i){
+        if (i == 3){
+            printf("Break!");
+            break;
+        } else if(i == 2){
+            printf("Contine!");
+            continue;
         }
+        printf("for %d\n", i);
     }
 }

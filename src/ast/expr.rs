@@ -229,7 +229,7 @@ impl ExprNode for EntityNode {
         self.entity.borrow().get_type()
     }
     fn is_addressable(&self) -> bool {
-        true
+        matches!(&*self.entity.borrow(), Entity::Variable(_))
     }
     fn value(
         &self,
@@ -333,8 +333,8 @@ impl ExprNode for PostfixExprNode {
                     .unwrap()
             }
             PostOp::Index(index) => {
-                assert!(self.expr.is_addressable());
                 if self.expr.get_type().is_array() {
+                    assert!(self.expr.is_addressable());
                     let addr = self.expr.addr(context, module, builder);
                     let index = index.value(context, module, builder).into_int_value();
                     let zero = context.i32_type().const_zero();
@@ -446,16 +446,7 @@ impl ExprNode for PostfixExprNode {
                 let index = self.expr.get_type().as_ref().field_index(field).unwrap();
                 builder.build_extract_value(expr, index as u32, "").unwrap()
             }
-            PostOp::MemberOfPointer(field) => {
-                let expr = self
-                    .expr
-                    .value(context, module, builder)
-                    .into_pointer_value();
-                let index = self.expr.get_type().as_ref().field_index(field).unwrap();
-                let addr = builder.build_struct_gep(expr, index as u32, "").unwrap();
-                builder.build_load(addr, "")
-            }
-            PostOp::Index(_) => {
+            PostOp::MemberOfPointer(_) | PostOp::Index(_) => {
                 let addr = self.addr(context, module, builder);
                 builder.build_load(addr, "")
             }
@@ -1219,7 +1210,7 @@ impl ExprNode for BinaryExprNode {
                     .into_int_value();
                 let rhs = self
                     .rhs
-                    .cast_value(context, module, builder, result_type.clone())
+                    .cast_value(context, module, builder, result_type)
                     .into_int_value();
                 builder.build_left_shift(lhs, rhs, "").as_basic_value_enum()
             }
@@ -1249,7 +1240,7 @@ impl ExprNode for BinaryExprNode {
                     .into_int_value();
                 let rhs = self
                     .rhs
-                    .cast_value(context, module, builder, result_type.clone())
+                    .cast_value(context, module, builder, result_type)
                     .into_int_value();
                 builder.build_and(lhs, rhs, "").as_basic_value_enum()
             }
@@ -1261,7 +1252,7 @@ impl ExprNode for BinaryExprNode {
                     .into_int_value();
                 let rhs = self
                     .rhs
-                    .cast_value(context, module, builder, result_type.clone())
+                    .cast_value(context, module, builder, result_type)
                     .into_int_value();
                 builder.build_or(lhs, rhs, "").as_basic_value_enum()
             }
@@ -1273,7 +1264,7 @@ impl ExprNode for BinaryExprNode {
                     .into_int_value();
                 let rhs = self
                     .rhs
-                    .cast_value(context, module, builder, result_type.clone())
+                    .cast_value(context, module, builder, result_type)
                     .into_int_value();
                 builder.build_xor(lhs, rhs, "").as_basic_value_enum()
             }

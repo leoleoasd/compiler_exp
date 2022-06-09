@@ -1,0 +1,71 @@
+
+\definecolor{ANSIblack}{HTML}{0C0C0C}
+\definecolor{ANSIblue}{HTML}{0037DA}
+\definecolor{ANSIcyan}{HTML}{3A96DD}
+\definecolor{ANSIgreen}{HTML}{13A10E}
+\definecolor{ANSIpurple}{HTML}{881798}
+\definecolor{ANSIred}{HTML}{C50F1F}
+\definecolor{ANSIwhite}{HTML}{CCCCCC}
+\definecolor{ANSIyellow}{HTML}{C19C00}
+\definecolor{ANSIbright-black}{HTML}{767676}
+\definecolor{ANSIbright-blue}{HTML}{3B78FF}
+\definecolor{ANSIbright-cyan}{HTML}{61D6D6}
+\definecolor{ANSIbright-green}{HTML}{16C60C}
+\definecolor{ANSIbright-purple}{HTML}{B4009E}
+\definecolor{ANSIbright-red}{HTML}{E74856}
+\definecolor{ANSIbright-white}{HTML}{F2F2F2}
+\definecolor{ANSIbright-yellow}{HTML}{F9F1A5}
+
+\newenvironment{ANSI}
+{
+\VerbatimEnvironment
+\lstset{fancyvrb=true}
+\lstset{morefvcmdparams=\color 1}
+\lstset{morefvcmdparams=\begingroup 0}
+\lstset{morefvcmdparams=\bfseries 0}
+\lstset{morefvcmdparams=\endgroup 0}
+\lstset{morefvcmdparams=\symbol 1}
+\lstset{breaklines}
+\begin{tcolorbox}[
+breakable,
+colback=black,
+arc=0mm,
+colupper=ANSIwhite
+]%
+\begin{Verbatim}[commandchars=+\[\]]}
+{\end{Verbatim}
+\end{tcolorbox}}
+
+\def\FVB@runcompiler{%
+  \@bsphack%
+  \begingroup%
+    \FV@UseKeyValues%
+    \FV@DefineWhiteSpace%
+    \def\FV@Space{\space}%
+    \FV@DefineTabOut%
+    \def\FV@ProcessLine{\immediate\write\FV@OutFile}%
+    \immediate\openout\FV@OutFile tmp.cb\relax%
+    \let\FV@FontScanPrep\relax%
+%% DG/SR modification begin - May. 18, 1998 (to avoid problems with ligatures)
+    \let\@noligs\relax
+%% DG/SR modification end
+    \FV@Scan}
+
+\def\FVE@runcompiler{\immediate\closeout\FV@OutFile\endgroup\@esphack
+    \immediate\write18{bash -c "unbuffer cbc tmp.cb | ansi-to-tex > .tmp.out
+    "}%
+    % \immediate\write18{bash -c ""}% 
+\input{.tmp.out}%
+}
+
+% \newcommand{\runcompiler}[1]{
+%     \immediate\write18{bash -c " < #1 > .tmp.out"}%
+%     \input{.tmp.out}%
+% }
+
+% \newcommand{\runcompiler}[1]{
+%     \immediate\write18{bash -c "unbuffer cbc #1 | ansi-to-tex > .tmp.out"}
+%     \input{.tmp.out}%
+% }
+
+\DefineVerbatimEnvironment{runcompiler}{runcompiler}{}

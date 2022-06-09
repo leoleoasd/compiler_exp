@@ -44,7 +44,7 @@ where
         // define global function and variables
         {
             let scope: &Scope = &self.parser.scope;
-            println!("{:#?}", scope.root);
+            // println!("{:#?}", scope.root);
             let root = scope.root.borrow();
             for ent in root.entities.values() {
                 match &mut *ent.borrow_mut() {
@@ -77,7 +77,7 @@ where
                                 BasicValueEnum::FloatValue(v) => unreachable!(),
                                 BasicValueEnum::StructValue(v) => unreachable!(),
                             }
-                            println!("{:?}", expr);
+                            // println!("{:?}", expr);
                             llvm_ptr.set_initializer(&expr);
                         } else {
                             llvm_ptr.set_initializer(&llvm_type.const_zero());
@@ -141,7 +141,7 @@ where
             }
         }
         self.module.print_to_file("test.ll").unwrap();
-        self.module.print_to_stderr();
+        // self.module.print_to_stderr();
         self.module
             .verify()
             .map_err(|e| eprintln!("{}", e.to_str().unwrap()))
@@ -241,7 +241,7 @@ where
                 );
             }
         }
-        for stmt in block.body.clone().unwrap().stmt_all() {
+        for stmt in block.stmt_all() {
             self.gen_stmt(stmt.as_ref());
         }
     }
@@ -274,7 +274,7 @@ where
                 let expr = expr
                     .as_ref()
                     .unwrap()
-                    .e
+                     .e
                     .as_ref()
                     .map(|expr| expr.value(self.context, self.module, &self.builder));
                 let expr = expr.as_ref().map(|v| v as &dyn BasicValue);

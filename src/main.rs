@@ -91,7 +91,14 @@ fn main() {
     let listener = errors::CodeSpanListener::new(&cli.name, code, token_vec.clone());
     parser.remove_error_listeners();
     parser.add_error_listener(Box::new(listener));
-    let result = parser.compUnit().unwrap();
+    let result = parser.compUnit();
+    let result = match result {
+        Ok(result) => result,
+        Err(err) => {
+            println!("Got error: {}, aborting", err);
+            return;
+        }
+    };
     let context: &'static mut Context = Box::leak(Box::new(Context::create()));
     let codegen = Box::leak(Box::new(CodeGen::new(
         context,

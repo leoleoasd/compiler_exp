@@ -179,15 +179,6 @@ impl SubScope {
     fn get(&self, name: &str) -> Option<Arc<RefCell<Entity>>> {
         self.entities.get(name).map(|s| s.to_owned())
     }
-    pub fn get_recursive(&self, name: &str) -> Option<Arc<RefCell<Entity>>> {
-        if let Some(e) = self.get(name) {
-            return Some(e);
-        }
-        match self.parent {
-            Some(ref p) => p.upgrade().unwrap().borrow().get_recursive(name),
-            None => None,
-        }
-    }
     fn define_function(
         &mut self,
         name: &str,

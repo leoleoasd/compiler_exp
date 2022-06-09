@@ -157,6 +157,7 @@ CONTINUE: 'continue';
 GOTO: 'goto';
 TYPEDEF: 'typedef';
 SIZEOF: 'sizeof';
+AUTO: 'auto';
 
 IDENTIFIER: [a-zA-Z_][a-zA-Z0-9_]*;
 
@@ -187,7 +188,32 @@ compUnit: topDef+ EOF;
 name: IDENTIFIER;
 topDef: funcDef | funcDecl | varDef | structDef;
 // TODO: support unionDef TODO: support typeDef;
-varDef locals [
+varDef: typedVarDef | autoVarDef;
+autoVarDef:
+	AUTO name '=' init=assignmentExpr {
+		let text = &$name.text; 
+		let init_expr = $init.e.as_ref().unwrap().clone();
+		let t = init_expr.get_type();
+		let result = recog.scope.define_variable(
+			text, 
+			location_for_ctx!($name.ctx),
+			t,
+			Some(init_expr)
+		);
+		report_or_unwrap!(result, recog, $name.ctx.start().token_index.load(Ordering::Relaxed));
+	} (',' name '=' init=assignmentExpr {
+		let text = &$name.text; 
+		let init_expr = $init.e.as_ref().unwrap().clone();
+		let t = init_expr.get_type();
+		let result = recog.scope.define_variable(
+			text, 
+			location_for_ctx!($name.ctx),
+			t,
+			Some(init_expr)
+		);
+		report_or_unwrap!(result, recog, $name.ctx.start().token_index.load(Ordering::Relaxed));
+	})*;
+typedVarDef locals [
 	Option<Box<dyn ExprNode>> init_expr
 ]:
 	s = storage t = typeName name ('=' init = assignmentExpr {
@@ -208,7 +234,7 @@ varDef locals [
 			t,
 			(&$init_expr).clone()
 		);
-		report_or_unwrap!(result, recog);
+		report_or_unwrap!(result, recog, $name.ctx.start().token_index.load(Ordering::Relaxed));
 	} (',' name ('=' init = assignmentExpr {
 		$init_expr = $init.e;
 	})?{
@@ -220,7 +246,7 @@ varDef locals [
 			t,
 			(&$init_expr).clone()
 		);
-		report_or_unwrap!(result, recog);
+		report_or_unwrap!(result, recog, $name.ctx.start().token_index.load(Ordering::Relaxed));
 	})* ';';
 // TODO: support const
 constDef: CONST t = typeName name '=' value = expr ';';
@@ -318,12 +344,11 @@ paramDecl
 block
 	returns[Option<Arc<RefCell<SubScope>>> scope]:
 	'{' {$scope = Some(recog.scope.push());} 
-	vars = defvarList body = stmts '}' {recog.scope.pop();};
-defvarList: vars = varDef*;
+	(varDef | stmt)* '}' {recog.scope.pop();};
 structDef:
 	STRUCT name memberList ';' {
 	let name = $name.text.to_owned();
-	let location = $start.start as usize .. recog.get_current_token().stop as usize - 3;
+	let location = $start.start as usize .. recog.get_current_token().stop as usize;
 	let selfType = Arc::new(Type::Struct{
 		name, 
 		fields: $memberList.v.borrow().clone().into_iter().map(|x| (x.0, x.1)).collect(),
